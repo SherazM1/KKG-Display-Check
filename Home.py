@@ -43,7 +43,7 @@ with st.container():
 colA, colB, colC = st.columns([1,1,1], gap="large")
 with colB:
     start = st.button("Start New Spec", type="primary", use_container_width=True)
-    open_ = st.button("Open Draft…", use_container_width=True)
+   
 
 # Placeholder interactions (wire to pages later)
 if start:
@@ -52,8 +52,6 @@ if start:
     st.session_state.setdefault("project", {})
     st.success("New spec started. (Navigation to the next page will be wired up next.)")
 
-if open_:
-    st.info("Draft loader coming next. For now, use “Start New Spec”.")
 
 # --- Recent Projects (placeholder card) ---
 st.markdown("### Recent Projects")
@@ -69,7 +67,7 @@ st.markdown(
 # --- Footer blurb ---
 st.markdown(
     "<div class='kkg-meta' style='text-align:center;margin-top:18px;'>"
-    "v0.1 — Kendal King Group · Raleway · Wide layout"
+    "v0.1 — Kendal King Group"
     "</div>",
     unsafe_allow_html=True,
 )
