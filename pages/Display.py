@@ -59,4 +59,4 @@ with right:
         st.info("Pick a drawing from the left to preview here.")
 
 st.divider()
-st.page_link("pages/Extract_Drawings.py", label="← Extract more drawings", icon="🪄")
+st.page_link("pages/ExtractDrawings.py", label="← Extract more drawings", icon="🪄")
