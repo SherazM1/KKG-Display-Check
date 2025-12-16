@@ -1,20 +1,10 @@
 # pages/Display.py
-# PDQ tray PDF -> cropped, transparent image preview + selection checkbox (no pricing yet)
+# PDQ tray PNG preview + selection checkbox; reveals a config section when selected (no pricing, no rendering)
 
 from __future__ import annotations
 import os
-from typing import Optional, Tuple
-
 import streamlit as st
-
-# Minimal deps only; PIL + numpy are common on Streamlit Cloud
-try:
-    import fitz  # PyMuPDF
-except Exception:
-    fitz = None
-
-from PIL import Image, ImageFilter
-import numpy as np
+from PIL import Image  # used only to verify/load PNG cleanly
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
@@ -26,106 +16,53 @@ st.markdown(
       .kkg-title { font-weight:700; font-size:22px; }
       .kkg-sub { color:#6b7280; }
       .kkg-label { text-align:center; font-weight:700; font-size:18px; color:#3b3f46; margin-top:8px; }
+      .kkg-note { color:#6b7280; font-size:13px; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-PDF_PATH = "assets/references/pdq/digital_pdq_tray.pdf"  # <- your file
-
-# ---------- Helpers ----------
-def render_pdf_first_page(pdf_path: str, scale: float = 2.0) -> Optional[Image.Image]:
-    """Rasterize page 1 to RGBA. Returns None if PyMuPDF missing or file not found."""
-    if fitz is None or not os.path.isfile(pdf_path):
-        return None
-    try:
-        doc = fitz.open(pdf_path)
-        page = doc.load_page(0)
-        mat = fitz.Matrix(scale, scale)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        doc.close()
-        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-        return img.convert("RGBA")
-    except Exception:
-        return None
-
-def crop_and_make_transparent(img: Image.Image, white_thresh: int = 245, margin_px: int = 12) -> Image.Image:
-    """Auto-trim white page and convert near-white to transparency. Why: show just the drawing, clean edges."""
-    arr = np.asarray(img)  # RGBA
-    rgb = arr[..., :3]
-    # near-white mask
-    near_white = (rgb[..., 0] > white_thresh) & (rgb[..., 1] > white_thresh) & (rgb[..., 2] > white_thresh)
-    content = ~near_white
-    if not content.any():
-        return img  # nothing to trim
-
-    ys, xs = np.where(content)
-    y0, y1 = ys.min(), ys.max()
-    x0, x1 = xs.min(), xs.max()
-
-    # margin
-    h, w = near_white.shape
-    x0 = max(0, x0 - margin_px)
-    y0 = max(0, y0 - margin_px)
-    x1 = min(w - 1, x1 + margin_px)
-    y1 = min(h - 1, y1 + margin_px)
-
-    cropped_rgb = rgb[y0:y1 + 1, x0:x1 + 1, :]
-    cropped_near_white = near_white[y0:y1 + 1, x0:x1 + 1]
-
-    # alpha: transparent for near white
-    alpha = np.where(cropped_near_white, 0, 255).astype(np.uint8)
-
-    # soften edges slightly to avoid halos
-    alpha_img = Image.fromarray(alpha, mode="L").filter(ImageFilter.GaussianBlur(radius=0.6))
-    out = Image.fromarray(cropped_rgb, mode="RGB").convert("RGBA")
-    out.putalpha(alpha_img)
-    return out
-
-@st.cache_data(show_spinner=False)
-def get_cropped_png_bytes(pdf_path: str, scale: float, white_thresh: int, margin_px: int) -> Optional[bytes]:
-    """Cache the conversion so we don't re-render every interaction."""
-    img = render_pdf_first_page(pdf_path, scale=scale)
-    if img is None:
-        return None
-    out = crop_and_make_transparent(img, white_thresh=white_thresh, margin_px=margin_px)
-    buf = st.runtime.uploaded_file_manager.io.BytesIO()
-    out.save(buf, format="PNG")
-    return buf.getvalue()
+# ---------- Asset path ----------
+PNG_PATH = "assets/references/pdq/digital_pdq_tray.png"  # your file
 
 # ---------- UI ----------
-st.markdown("<div class='kkg-title'>PDQ Tray</div><div class='kkg-sub'>Preview from your reference PDF (auto-cropped, transparent).</div>", unsafe_allow_html=True)
+st.markdown("<div class='kkg-title'>PDQ Tray</div><div class='kkg-sub'>Static image selector for price estimation (no rendering).</div>", unsafe_allow_html=True)
 st.divider()
 
 left, right = st.columns([0.65, 0.35], gap="large")
 
 with left:
-    # Tuning controls are visible for now; set and forget once you're happy.
-    scale = st.slider("Render scale", 1.0, 3.0, 2.0, 0.25, help="Higher = sharper image (bigger file).")
-    white_thresh = st.slider("White threshold", 220, 255, 245, 1, help="Higher removes more light pixels.")
-    margin = st.slider("Trim margin (px)", 0, 40, 12, 1)
-
-    png_bytes = get_cropped_png_bytes(PDF_PATH, scale, white_thresh, margin)
-
-    if png_bytes is None:
-        if fitz is None:
-            st.error("PyMuPDF is not installed. Add `pymupdf` to requirements.txt and redeploy.")
-        elif not os.path.isfile(PDF_PATH):
-            st.error(f"PDF not found at `{PDF_PATH}`. Make sure the file exists and is committed.")
-        else:
-            st.error("Failed to render the PDF. Try lowering the render scale.")
+    if not os.path.isfile(PNG_PATH):
+        st.error(f"PNG not found at `{PNG_PATH}`. Add it to the repo and refresh.")
     else:
-        st.image(png_bytes, caption="PDQ Tray (cropped, transparent)", use_column_width=True)
+        # Show at native size (no explicit resizing)
+        img = Image.open(PNG_PATH)
+        st.image(img, caption="PDQ Tray", use_column_width=False)
         st.markdown("<div class='kkg-label'>PDQ Tray</div>", unsafe_allow_html=True)
-        st.session_state.pdq_selected = st.checkbox("Use this PDQ Tray for the estimate", value=st.session_state.get("pdq_selected", False))
+
+        # Selection checkbox
+        selected_default = bool(st.session_state.get("pdq_selected", False))
+        pdq_selected = st.checkbox("Use this PDQ Tray for the estimate", value=selected_default)
+        st.session_state.pdq_selected = pdq_selected  # persist
+
+        st.divider()
+
+        # Reveal fields area only when selected (placeholders for now)
+        if pdq_selected:
+            st.subheader("PDQ Tray — Configuration")
+            st.markdown(
+                "<div class='kkg-note'>Fields (size, wall style, lip graphic, dividers, material, grade, finish, assembly, weight, qty, freight) will appear here.</div>",
+                unsafe_allow_html=True,
+            )
+            # TODO: Add real controls after you provide the exact list/order.
+        else:
+            st.info("Select the PDQ Tray above to configure its details.")
 
 with right:
     st.subheader("Status")
-    ok_pdf = os.path.isfile(PDF_PATH)
-    st.write(f"PDF: {'✅ Found' if ok_pdf else '❌ Missing'}")
-    st.write(f"PyMuPDF: {'✅ Installed' if fitz is not None else '❌ Not installed'}")
+    st.write(f"Image: {'✅ Found' if os.path.isfile(PNG_PATH) else '❌ Missing'}")
     st.write(f"Selected: {'✅ Yes' if st.session_state.get('pdq_selected') else '—'}")
     st.page_link("Home.py", label="Back to Home", icon="🏠")
 
 st.divider()
-st.caption("Next: we’ll stack PDQ fields (size, wall style, lip graphic, etc.) under this image. No pricing yet.")
+st.caption("Next: provide the exact PDQ field list and order; we’ll drop the controls into the Configuration section.")
