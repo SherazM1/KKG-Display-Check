@@ -1,12 +1,20 @@
 # pages/Display.py
-# Single-variant gallery + live vector render: "48″ Sidekick with Shelves"
+# PDQ tray PDF -> cropped, transparent image preview + selection checkbox (no pricing yet)
+
 from __future__ import annotations
 import os
-from typing import List, Tuple, Callable, Dict
+from typing import Optional, Tuple
 
 import streamlit as st
-from streamlit.components.v1 import html
-from PIL import Image
+
+# Minimal deps only; PIL + numpy are common on Streamlit Cloud
+try:
+    import fitz  # PyMuPDF
+except Exception:
+    fitz = None
+
+from PIL import Image, ImageFilter
+import numpy as np
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
@@ -15,148 +23,109 @@ st.markdown(
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-      .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:10px; }
-      .kkg-cap { color:#6b7280; font-size:12px; margin-top:6px; }
-      .kkg-label { text-align:center; font-weight:700; font-size:18px; color:#3b3f46; margin-top:12px; }
-      .kkg-sub { text-align:center; color:#6b7280; margin-top:2px; }
+      .kkg-title { font-weight:700; font-size:22px; }
+      .kkg-sub { color:#6b7280; }
+      .kkg-label { text-align:center; font-weight:700; font-size:18px; color:#3b3f46; margin-top:8px; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ---------- Colors / drawing helpers ----------
-ACCENT = "#4E5BA8"
-STROKE = "#3b3f46"
-FILL_FACE = "#E8E6E0"  # oyster-like neutral
-FILL_TOP  = "#F5F7FB"
-SHADE     = "#f1f3f6"
-SHADOW    = "rgba(0,0,0,0.10)"
+PDF_PATH = "assets/references/pdq/digital_pdq_tray.pdf"  # <- your file
 
-def _path(points: List[Tuple[float, float]]) -> str:
-    return " ".join([("M" if i == 0 else "L") + f"{x:.1f},{y:.1f}" for i, (x, y) in enumerate(points)]) + " Z"
+# ---------- Helpers ----------
+def render_pdf_first_page(pdf_path: str, scale: float = 2.0) -> Optional[Image.Image]:
+    """Rasterize page 1 to RGBA. Returns None if PyMuPDF missing or file not found."""
+    if fitz is None or not os.path.isfile(pdf_path):
+        return None
+    try:
+        doc = fitz.open(pdf_path)
+        page = doc.load_page(0)
+        mat = fitz.Matrix(scale, scale)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        doc.close()
+        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        return img.convert("RGBA")
+    except Exception:
+        return None
 
-def _poly(points, fill, stroke=STROKE, sw=2.0, extra=""):
-    return f'<path d="{_path(points)}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}" {extra}/>'
+def crop_and_make_transparent(img: Image.Image, white_thresh: int = 245, margin_px: int = 12) -> Image.Image:
+    """Auto-trim white page and convert near-white to transparency. Why: show just the drawing, clean edges."""
+    arr = np.asarray(img)  # RGBA
+    rgb = arr[..., :3]
+    # near-white mask
+    near_white = (rgb[..., 0] > white_thresh) & (rgb[..., 1] > white_thresh) & (rgb[..., 2] > white_thresh)
+    content = ~near_white
+    if not content.any():
+        return img  # nothing to trim
 
-def _line(x1,y1,x2,y2, dash=None, sw=1.4, color=STROKE):
-    d = f' stroke-dasharray="{dash}"' if dash else ""
-    return f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{sw}"{d}/>'
+    ys, xs = np.where(content)
+    y0, y1 = ys.min(), ys.max()
+    x0, x1 = xs.min(), xs.max()
 
-def _curve_lip(x, y, w, h, bulge=10, stroke=STROKE):
-    """Bowed shelf lip (why: matches the book’s curved front)."""
-    cx1 = x + w * 0.22; cx2 = x + w * 0.78
-    d = (
-        f'M{x:.1f},{y:.1f} '
-        f'L{x + w:.1f},{y:.1f} '
-        f'L{x + w:.1f},{y + h:.1f} '
-        f'C{cx2:.1f},{y + h + bulge:.1f} {cx1:.1f},{y + h + bulge:.1f} {x:.1f},{y + h:.1f} Z'
-    )
-    return f'<path d="{d}" fill="#ffffff" stroke="{stroke}" stroke-width="2"/>'
+    # margin
+    h, w = near_white.shape
+    x0 = max(0, x0 - margin_px)
+    y0 = max(0, y0 - margin_px)
+    x1 = min(w - 1, x1 + margin_px)
+    y1 = min(h - 1, y1 + margin_px)
 
-# ---------- Renderer: 48″ Sidekick with Shelves ----------
-def render_sidekick_48_shelves(w: int = 540, h: int = 560) -> str:
-    fw, fh = 170, 430            # front width/height (tall & narrow)
-    depth = 55
-    dx, dy = depth, -depth * 0.45
-    ox, oy = 160, 470            # origin at front-bottom-left
-    header_h = 44
-    shelf_count = 4
-    shelf_gap = (fh - 60) / shelf_count
-    lip_h = 24
-    cavity_h = shelf_gap - lip_h - 10
+    cropped_rgb = rgb[y0:y1 + 1, x0:x1 + 1, :]
+    cropped_near_white = near_white[y0:y1 + 1, x0:x1 + 1]
 
-    front = [(ox, oy), (ox + fw, oy), (ox + fw, oy - fh), (ox, oy - fh)]
-    side  = [(ox + fw, oy), (ox + fw + dx, oy + dy), (ox + fw + dx, oy + dy - fh), (ox + fw, oy - fh)]
-    top_face = [(ox, oy - fh), (ox + fw, oy - fh), (ox + fw + dx, oy + dy - fh), (ox + dx, oy + dy - fh)]
+    # alpha: transparent for near white
+    alpha = np.where(cropped_near_white, 0, 255).astype(np.uint8)
 
-    svg = [f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">']
-    svg.append(f'<ellipse cx="{ox+fw*0.6:.1f}" cy="{oy+12:.1f}" rx="{(fw+depth)*0.55:.1f}" ry="12" fill="{SHADOW}"/>')
+    # soften edges slightly to avoid halos
+    alpha_img = Image.fromarray(alpha, mode="L").filter(ImageFilter.GaussianBlur(radius=0.6))
+    out = Image.fromarray(cropped_rgb, mode="RGB").convert("RGBA")
+    out.putalpha(alpha_img)
+    return out
 
-    # Chassis
-    svg.append(_poly(side, FILL_FACE))
-    svg.append(_poly(front, FILL_FACE))
-    svg.append(_poly(top_face, FILL_TOP, sw=1.8))
-
-    # Header
-    hx1, hy1 = ox, oy - fh - header_h
-    hx2, hy2 = ox + fw, oy - fh
-    header_front = [(hx1, hy2), (hx2, hy2), (hx2, hy1), (hx1, hy1)]
-    header_side  = [(hx2, hy2), (hx2 + dx, hy2 + dy), (hx2 + dx, hy2 + dy - header_h * 0.98), (hx2, hy1)]
-    svg.append(_poly(header_front, "#ffffff"))
-    svg.append(_poly(header_side, "#f5f7fb"))
-
-    # Shelves (4): cavity + curved lip + subtle interior line
-    x_pad = 12; right_pad = 10
-    for i in range(shelf_count):
-        y_top = oy - 48 - i * shelf_gap
-        cav_x = ox + x_pad
-        cav_y = y_top - cavity_h
-        cav_w = fw - x_pad - right_pad
-        cav_h = cavity_h
-        svg.append(_poly(
-            [(cav_x, cav_y + cav_h), (cav_x + cav_w, cav_y + cav_h),
-             (cav_x + cav_w, cav_y), (cav_x, cav_y)],
-            SHADE, sw=1.6
-        ))
-        lip_x = ox + x_pad - 2
-        lip_y = cav_y + cav_h + 2
-        lip_w = fw - x_pad - right_pad + 4
-        svg.append(_curve_lip(lip_x, lip_y, lip_w, lip_h, bulge=10))
-        svg.append(_line(cav_x, cav_y, cav_x + cav_w*0.35, cav_y + cav_h*0.35, sw=1, color="#c7c7c7"))
-
-    # Inner vertical detail
-    svg.append(_line(ox + fw*0.32, oy, ox + fw*0.32, oy - fh, sw=1.6, color="#7a7f87"))
-
-    svg.append("</svg>")
-    return "".join(svg)
-
-# ---------- Variant registry (add more later) ----------
-Variant = Dict[str, object]
-VARIANTS: List[Variant] = [
-    {
-        "key": "sidekick-48-shelves",
-        "label": "48″ Sidekick with Shelves",
-        "renderer": render_sidekick_48_shelves,
-        "ref_path": "assets/references/sidekick-48-shelves.png",  # optional; show if exists
-    },
-]
+@st.cache_data(show_spinner=False)
+def get_cropped_png_bytes(pdf_path: str, scale: float, white_thresh: int, margin_px: int) -> Optional[bytes]:
+    """Cache the conversion so we don't re-render every interaction."""
+    img = render_pdf_first_page(pdf_path, scale=scale)
+    if img is None:
+        return None
+    out = crop_and_make_transparent(img, white_thresh=white_thresh, margin_px=margin_px)
+    buf = st.runtime.uploaded_file_manager.io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
 
 # ---------- UI ----------
-st.markdown("## Display Library")
-st.caption("Select a drawing. Right side shows a clean vector preview; optional reference appears if provided.")
+st.markdown("<div class='kkg-title'>PDQ Tray</div><div class='kkg-sub'>Preview from your reference PDF (auto-cropped, transparent).</div>", unsafe_allow_html=True)
+st.divider()
 
-left, right = st.columns([0.58, 0.42], gap="large")
-
-# Ensure selection exists
-if "selected_variant_key" not in st.session_state:
-    st.session_state.selected_variant_key = VARIANTS[0]["key"]
+left, right = st.columns([0.65, 0.35], gap="large")
 
 with left:
-    cols = st.columns(3, gap="large")
-    for i, v in enumerate(VARIANTS):
-        col = cols[i % 3]
-        with col:
-            st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
-            # If you placed an image at assets/references/{key}.png, show it small under the tile
-            ref_path = v.get("ref_path")
-            if ref_path and os.path.isfile(ref_path):
-                st.image(Image.open(ref_path), use_column_width=True)
-            st.caption(v["label"])
-            chosen = st.button("Select", key=f"sel_{v['key']}", use_container_width=True)
-            if chosen:
-                st.session_state.selected_variant_key = v["key"]
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Tuning controls are visible for now; set and forget once you're happy.
+    scale = st.slider("Render scale", 1.0, 3.0, 2.0, 0.25, help="Higher = sharper image (bigger file).")
+    white_thresh = st.slider("White threshold", 220, 255, 245, 1, help="Higher removes more light pixels.")
+    margin = st.slider("Trim margin (px)", 0, 40, 12, 1)
+
+    png_bytes = get_cropped_png_bytes(PDF_PATH, scale, white_thresh, margin)
+
+    if png_bytes is None:
+        if fitz is None:
+            st.error("PyMuPDF is not installed. Add `pymupdf` to requirements.txt and redeploy.")
+        elif not os.path.isfile(PDF_PATH):
+            st.error(f"PDF not found at `{PDF_PATH}`. Make sure the file exists and is committed.")
+        else:
+            st.error("Failed to render the PDF. Try lowering the render scale.")
+    else:
+        st.image(png_bytes, caption="PDQ Tray (cropped, transparent)", use_column_width=True)
+        st.markdown("<div class='kkg-label'>PDQ Tray</div>", unsafe_allow_html=True)
+        st.session_state.pdq_selected = st.checkbox("Use this PDQ Tray for the estimate", value=st.session_state.get("pdq_selected", False))
 
 with right:
-    # Find active variant
-    active = next(v for v in VARIANTS if v["key"] == st.session_state.selected_variant_key)
-    st.subheader("Preview")
-    svg_markup = active["renderer"]()  # type: ignore[arg-type]
-    html(svg_markup, height=600)
-    st.markdown(f'<div class="kkg-label">{active["label"]}</div>', unsafe_allow_html=True)
-    # Optional reference side-by-side below
-    if active.get("ref_path") and os.path.isfile(active["ref_path"]):  # type: ignore[index]
-        st.image(Image.open(active["ref_path"]), use_column_width=True, caption="Reference (optional)")
+    st.subheader("Status")
+    ok_pdf = os.path.isfile(PDF_PATH)
+    st.write(f"PDF: {'✅ Found' if ok_pdf else '❌ Missing'}")
+    st.write(f"PyMuPDF: {'✅ Installed' if fitz is not None else '❌ Not installed'}")
+    st.write(f"Selected: {'✅ Yes' if st.session_state.get('pdq_selected') else '—'}")
+    st.page_link("Home.py", label="Back to Home", icon="🏠")
 
 st.divider()
-st.page_link("Home.py", label="Back to Home", icon="🏠")
+st.caption("Next: we’ll stack PDQ fields (size, wall style, lip graphic, etc.) under this image. No pricing yet.")
