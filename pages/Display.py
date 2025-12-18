@@ -5,6 +5,8 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+import pandas as pd
+
 
 import streamlit as st
 from PIL import Image
@@ -320,13 +322,20 @@ def render_pdq_form():
         if not resolved:
             st.caption("Nothing resolved yet (all base values are 0).")
         else:
-            st.markdown("<table class='kkg-table' width='100%'><tr><th>Part</th><th class='mono'>Qty</th><th class='mono'>Unit $</th><th class='mono'>Line $</th></tr>", unsafe_allow_html=True)
+            rows = []
             for part_key, q in resolved:
                 unit_val = _parts_value(catalog, part_key)
                 line = unit_val * q
                 label = catalog.get("parts", {}).get(part_key, {}).get("label", part_key)
-                st.markdown(f"<tr><td>{label}</td><td class='mono'>{q}</td><td class='mono'>{unit_val:,.2f}</td><td class='mono'>{line:,.2f}</td></tr>", unsafe_allow_html=True)
-            st.markdown("</table>", unsafe_allow_html=True)
+                rows.append({
+                "Part": label,
+                "Qty": q,
+                "Unit $": f"{unit_val:,.2f}",
+                "Line $": f"{line:,.2f}",
+                })
+            df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])
+            st.table(df)
+
 
         st.markdown("#### Unit tier match")
         st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")
