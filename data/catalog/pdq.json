@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "category": "pdq",
+    "display_label": "PDQ Tray",
+    "hero_image": "assets/references/pdq/digital_pdq_tray.png"
+  },
+  "controls": [
+    {
+      "id": "footprint",
+      "label": "Footprint",
+      "type": "single",
+      "required": true,
+      "options": [
+        {
+          "key": "fp-36x12",
+          "label": "36 × 12",
+          "base_value": 0,
+          "dims": { "width_in": 36, "depth_in": 12 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-48x12",
+          "label": "48 × 12",
+          "base_value": 0,
+          "dims": { "width_in": 48, "depth_in": 12 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-36x24",
+          "label": "36 × 24",
+          "base_value": 0,
+          "dims": { "width_in": 36, "depth_in": 24 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-48x24",
+          "label": "48 × 24",
+          "base_value": 0,
+          "dims": { "width_in": 48, "depth_in": 24 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        }
+      ]
+    },
+    {
+      "id": "header",
+      "label": "Header",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "header-yes", "label": "Yes", "base_value": 0 },
+        { "key": "header-no",  "label": "No",  "base_value": 0 }
+      ],
+      "notes": "If Yes is chosen, the priced part depends on footprint width: 36\" → header-36, 48\" → header-48."
+    },
+    {
+      "id": "divider_count",
+      "label": "Number of Dividers",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Linear pricing: unit divider price × count. Auto-selects divider-12 or divider-24 by footprint depth."
+    },
+    {
+      "id": "shipper",
+      "label": "Shipper",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "shipper-yes", "label": "Yes", "base_value": 0 },
+        { "key": "shipper-no",  "label": "No",  "base_value": 0 }
+      ],
+      "notes": "Per-unit shipper; if Yes, resolves to a footprint-specific part."
+    },
+    {
+      "id": "assembly",
+      "label": "Assembly",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "assembly-kdf",      "label": "KDF",      "base_value": 0 },
+        { "key": "assembly-turnkey",  "label": "Turnkey",  "base_value": 0 }
+      ],
+      "notes": "KDF/Turnkey are non-priced switches; only Turnkey with touches adds cost."
+    },
+    {
+      "id": "product_touches",
+      "label": "Product Touches",
+      "type": "number",
+      "required": false,
+      "min": 0,
+      "notes": "Only used when Assembly = Turnkey; cost = touch unit × touches."
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "notes": "Used for unit tiers, total lbs, and program total."
+    },
+    {
+      "id": "unit_weight_unit",
+      "label": "Unit Weight — Unit",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "lb", "label": "Pounds (lb)", "base_value": 0 },
+        { "key": "oz", "label": "Ounces (oz)", "base_value": 0 }
+      ],
+      "notes": "If oz is selected, unit weight is converted to pounds for total lbs."
+    },
+    {
+      "id": "unit_weight_value",
+      "label": "Unit Weight — Value",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Numeric value of unit weight; paired with the selected unit (oz/lb)."
+    },
+    {
+      "id": "complexity_level",
+      "label": "Complexity",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "cx-low",  "label": "Low",    "base_value": 0 },
+        { "key": "cx-med",  "label": "Medium", "base_value": 0 },
+        { "key": "cx-high", "label": "High",   "base_value": 0 }
+      ],
+      "notes": "Adds 0% / 5% / 10% to the base 35% markup respectively."
+    }
+  ],
+  "parts": {
+    "header-36": { "label": "Header (36\")", "base_value": 0 },
+    "header-48": { "label": "Header (48\")", "base_value": 0 },
+    "header-none": { "label": "No Header", "base_value": 0 },
+
+    "divider-12": { "label": "Divider (12\" depth)", "base_value": 0 },
+    "divider-24": { "label": "Divider (24\" depth)", "base_value": 0 },
+
+    "shipper-fp-36x12": { "label": "Shipper (36×12)", "base_value": 0 },
+    "shipper-fp-48x12": { "label": "Shipper (48×12)", "base_value": 0 },
+    "shipper-fp-36x24": { "label": "Shipper (36×24)", "base_value": 0 },
+    "shipper-fp-48x24": { "label": "Shipper (48×24)", "base_value": 0 },
+
+    "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0 }
+  },
+  "rules": {
+    "resolve_header": {
+      "when_control": "header",
+      "when_value": "header-yes",
+      "based_on_control": "footprint",
+      "match_on_dim": "width_in",
+      "map": {
+        "36": "header-36",
+        "48": "header-48"
+      },
+      "else": "header-none"
+    },
+    "resolve_dividers": {
+      "quantity_control": "divider_count",
+      "based_on_control": "footprint",
+      "match_on_dim": "depth_in",
+      "map": {
+        "12": "divider-12",
+        "24": "divider-24"
+      },
+      "else": null,
+      "pricing": "linear"
+    },
+    "resolve_shipper": {
+      "when_control": "shipper",
+      "when_value": "shipper-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-36x12": "shipper-fp-36x12",
+        "fp-48x12": "shipper-fp-48x12",
+        "fp-36x24": "shipper-fp-36x24",
+        "fp-48x24": "shipper-fp-48x24"
+      },
+      "else": null
+    },
+    "resolve_assembly_touches": {
+      "when_control": "assembly",
+      "when_value": "assembly-turnkey",
+      "quantity_control": "product_touches",
+      "min_quantity": 1,
+      "part": "assembly-touch-unit",
+      "pricing": "linear",
+      "else": null
+    }
+  },
+  "policy": {
+    "base_markup": 0.35,
+    "weight_tiers": [
+      { "min_lbs": 0,   "max_lbs": 4.999, "add": 0.00 },
+      { "min_lbs": 5,   "max_lbs": 9.999, "add": 0.05 },
+      { "min_lbs": 10,  "max_lbs": null,  "add": 0.10 }
+    ],
+    "complexity_add": {
+      "cx-low":  0.00,
+      "cx-med":  0.05,
+      "cx-high": 0.10
+    },
+    "unit_tiers": [
+      { "min_qty": 1,     "max_qty": 199,   "factor": 1.00 },
+      { "min_qty": 200,   "max_qty": 499,   "factor": 1.00 },
+      { "min_qty": 500,   "max_qty": 999,   "factor": 1.00 },
+      { "min_qty": 1000,  "max_qty": 1999,  "factor": 1.00 },
+      { "min_qty": 2000,  "max_qty": 2999,  "factor": 1.00 },
+      { "min_qty": 3000,  "max_qty": null,  "factor": 1.00 }
+    ],
+    "tier_boundary": "inclusive",
+    "display_weight_round": 0.01,
+    "markup_application": "program_total"
+  }
+}
