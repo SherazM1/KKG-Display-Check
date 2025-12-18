@@ -131,6 +131,11 @@
     }
   ],
   "parts": {
+    "footprint-fp-36x12": { "label": "Footprint Base (36×12)", "base_value": 0 },
+    "footprint-fp-48x12": { "label": "Footprint Base (48×12)", "base_value": 0 },
+    "footprint-fp-36x24": { "label": "Footprint Base (36×24)", "base_value": 0 },
+    "footprint-fp-48x24": { "label": "Footprint Base (48×24)", "base_value": 0 },
+
     "header-36": { "label": "Header (36\")", "base_value": 0 },
     "header-48": { "label": "Header (48\")", "base_value": 0 },
     "header-none": { "label": "No Header", "base_value": 0 },
@@ -146,6 +151,15 @@
     "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0 }
   },
   "rules": {
+    "resolve_footprint_base": {
+      "based_on_control": "footprint",
+      "map": {
+        "fp-36x12": "footprint-fp-36x12",
+        "fp-48x12": "footprint-fp-48x12",
+        "fp-36x24": "footprint-fp-36x24",
+        "fp-48x24": "footprint-fp-48x24"
+      }
+    },
     "resolve_header": {
       "when_control": "header",
       "when_value": "header-yes",
