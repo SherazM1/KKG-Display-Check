@@ -1,5 +1,5 @@
 # pages/Display.py
-# Catalog-driven PDQ UI + rule resolution + preview (includes footprint base)
+# Catalog-driven PDQ UI + rule resolution + preview (includes footprint base; float weight input)
 from __future__ import annotations
 import json
 import os
@@ -97,11 +97,22 @@ def _footprint_dims(catalog: Dict, footprint_key: str) -> Tuple[Optional[int], O
     return None, None
 
 def _parts_value(catalog: Dict, part_key: str) -> float:
-    # Why: safe if keys are missing or zero during placeholder phase
     try:
         return float(catalog.get("parts", {}).get(part_key, {}).get("base_value", 0) or 0)
     except Exception:
         return 0.0
+
+def _round_display_weight(total_lbs: float, policy: Dict) -> str:
+    step = policy.get("display_weight_round", 0.01)
+    try:
+        step = float(step)
+    except Exception:
+        step = 0.01
+    # derive decimals from step like 0.01 -> 2
+    s = f"{step:.10f}".rstrip("0").rstrip(".")
+    decimals = len(s.split(".")[1]) if "." in s else 0
+    fmt = f"{{:.{decimals}f}}"
+    return fmt.format(total_lbs)
 
 # ---------- Page header ----------
 st.markdown("## Select the type of display")
@@ -143,7 +154,7 @@ def render_pdq_form():
         label = ctrl.get("label")
         key = f"pdq__{cid}"
 
-        # Conditional visibility: product_touches only if assembly-turnkey
+        # Only show touches when assembly-turnkey (why: UX clarity, avoids confusion)
         if cid == "product_touches":
             assembly_key = st.session_state.form.get("assembly")
             if assembly_key != "assembly-turnkey":
@@ -155,7 +166,6 @@ def render_pdq_form():
             labels = [o.get("label") for o in opts]
             keys = [o.get("key") for o in opts]
 
-            # radio for compact sets (<=3), selectbox otherwise
             default_idx = 0
             if cid in st.session_state.form and st.session_state.form[cid] in keys:
                 default_idx = keys.index(st.session_state.form[cid])
@@ -169,31 +179,44 @@ def render_pdq_form():
 
         elif ctype == "number":
             min_v = ctrl.get("min", 0)
-            default = st.session_state.form.get(cid, min_v if cid != "quantity" else max(1, min_v))
-            val = st.number_input(label, min_value=min_v, step=1, value=int(default), key=key)
-            st.session_state.form[cid] = int(val)
+            saved = st.session_state.form.get(cid)
+
+            if cid in ("quantity", "divider_count", "product_touches"):
+                default = int(saved) if saved is not None else (max(1, min_v) if cid == "quantity" else int(min_v))
+                val = st.number_input(label, min_value=int(min_v), step=1, value=int(default), key=key)
+                st.session_state.form[cid] = int(val)
+
+            elif cid == "unit_weight_value":
+                # float weight input (oz or lb)
+                default = float(saved) if saved is not None else 0.0
+                val = st.number_input(label, min_value=0.0, step=0.01, value=float(default), format="%.2f", key=key)
+                st.session_state.form[cid] = float(val)
+
+            else:
+                default = float(saved) if saved is not None else float(min_v)
+                val = st.number_input(label, min_value=float(min_v), step=0.01, value=float(default), key=key)
+                st.session_state.form[cid] = float(val)
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
     # ---------- Resolution (rules) ----------
     form = st.session_state.form
     rules = catalog.get("rules", {})
-    parts = catalog.get("parts", {})
 
     resolved: List[Tuple[str, int]] = []  # (part_key, qty)
 
-    # Helper: footprint dims
+    # footprint dims
     fp_key = form.get("footprint")
     width_in, depth_in = _footprint_dims(catalog, fp_key) if fp_key else (None, None)
 
-    # resolve_footprint_base (always map to one base per unit)
+    # footprint base
     if "resolve_footprint_base" in rules and fp_key:
         r = rules["resolve_footprint_base"]
         base_part = r.get("map", {}).get(fp_key)
         if base_part:
             resolved.append((base_part, 1))
 
-    # resolve_header
+    # header
     if "resolve_header" in rules:
         r = rules["resolve_header"]
         if form.get(r.get("when_control")) == r.get("when_value"):
@@ -206,18 +229,18 @@ def render_pdq_form():
         if part:
             resolved.append((part, 1))
 
-    # resolve_dividers
+    # dividers
     if "resolve_dividers" in rules:
         r = rules["resolve_dividers"]
         qty_ctrl = r.get("quantity_control")
-        qty = int(form.get(qty_ctrl, 0) or 0)
+        dqty = int(form.get(qty_ctrl, 0) or 0)
         part = None
-        if qty > 0 and r.get("match_on_dim") == "depth_in" and depth_in is not None:
+        if dqty > 0 and r.get("match_on_dim") == "depth_in" and depth_in is not None:
             part = r.get("map", {}).get(str(depth_in), r.get("else"))
-        if part and qty > 0:
-            resolved.append((part, qty))
+        if part and dqty > 0:
+            resolved.append((part, dqty))
 
-    # resolve_shipper
+    # shipper
     if "resolve_shipper" in rules:
         r = rules["resolve_shipper"]
         if form.get(r.get("when_control")) == r.get("when_value"):
@@ -225,22 +248,22 @@ def render_pdq_form():
             if part:
                 resolved.append((part, 1))
 
-    # resolve_assembly_touches
+    # assembly touches
     if "resolve_assembly_touches" in rules:
         r = rules["resolve_assembly_touches"]
         if form.get(r.get("when_control")) == r.get("when_value"):
-            qty_ctrl = r.get("quantity_control")
-            qty = int(form.get(qty_ctrl, 0) or 0)
-            if qty >= int(r.get("min_quantity", 1)):
+            tq_ctrl = r.get("quantity_control")
+            tqty = int(form.get(tq_ctrl, 0) or 0)
+            if tqty >= int(r.get("min_quantity", 1)):
                 part = r.get("part")
                 if part:
-                    resolved.append((part, qty))
+                    resolved.append((part, tqty))
 
     # ---------- Policy: tiers/weight/complexity ----------
     policy = catalog.get("policy", {})
     qty = int(form.get("quantity", 1) or 1)
 
-    # Unit tiers (per-unit)
+    # unit tiers (per-unit)
     unit_factor = 1.0
     for band in policy.get("unit_tiers", []):
         min_q = int(band.get("min_qty", 0))
@@ -256,13 +279,13 @@ def render_pdq_form():
                 if qty >= min_q and qty < int(max_q):
                     unit_factor = float(band.get("factor", 1.0))
 
-    # Weight (total lbs)
+    # weight (convert to lb if oz)
     unit_weight_unit = form.get("unit_weight_unit", "lb")
     unit_weight_val = float(form.get("unit_weight_value", 0) or 0)
-    unit_lb = unit_weight_val / 16.0 if unit_weight_unit == "oz" else unit_weight_val
+    unit_lb = unit_weight_val / 16.0 if unit_weight_unit == "oz" else unit_weight_val  # <- conversion for markup rules
     total_lbs = unit_lb * qty
 
-    # Weight add %
+    # weight add %
     weight_add = 0.0
     for bucket in policy.get("weight_tiers", []):
         min_l = float(bucket.get("min_lbs", 0))
@@ -274,7 +297,7 @@ def render_pdq_form():
             if total_lbs >= min_l and total_lbs <= float(max_l):
                 weight_add = float(bucket.get("add", 0))
 
-    # Complexity add %
+    # complexity add %
     cx_key = form.get("complexity_level", "cx-low")
     complexity_add = float(policy.get("complexity_add", {}).get(cx_key, 0.0))
     base_markup = float(policy.get("base_markup", 0.35))
@@ -309,8 +332,9 @@ def render_pdq_form():
         st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")
 
         st.markdown("#### Weight & Markup")
+        weight_str = _round_display_weight(total_lbs, policy)
         st.write(
-            f"Total weight: **{total_lbs:.2f} lb**  "
+            f"Total weight: **{weight_str} lb**  "
             f"<span class='pill'>unit={unit_weight_val:g} {unit_weight_unit}</span>"
             f"<span class='pill'>qty={qty}</span>",
             unsafe_allow_html=True,
@@ -327,7 +351,7 @@ def render_pdq_form():
         st.write(f"Program base (pre-markup): **${program_base:,.2f}**")
         st.write(f"Final (post-markup): **${final_total:,.2f}**")
 
-    st.markdown("<div class='muted'>All values are placeholders until prices are populated.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
