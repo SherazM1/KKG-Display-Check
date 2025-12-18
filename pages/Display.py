@@ -154,12 +154,19 @@ def render_pdq_form():
             opts = ctrl.get("options", [])
             labels = [o.get("label") for o in opts]
             keys = [o.get("key") for o in opts]
-            widget = st.radio if len(labels) <= 3 else st.selectbox
+
+            # radio for compact sets (<=3), selectbox otherwise
             default_idx = 0
             if cid in st.session_state.form and st.session_state.form[cid] in keys:
                 default_idx = keys.index(st.session_state.form[cid])
-            choice = widget(label, labels, index=default_idx, key=key, horizontal=True if widget==st.radio else False)
+
+            if len(labels) <= 3:
+                choice = st.radio(label, labels, index=default_idx, key=key, horizontal=True)
+            else:
+                choice = st.selectbox(label, labels, index=default_idx, key=key)
+
             st.session_state.form[cid] = keys[labels.index(choice)]
+
         elif ctype == "number":
             min_v = ctrl.get("min", 0)
             default = st.session_state.form.get(cid, min_v if cid != "quantity" else max(1, min_v))
