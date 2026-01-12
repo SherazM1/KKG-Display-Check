@@ -5,10 +5,10 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-import pandas as pd
 
+import pandas as pd
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageOps
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
@@ -17,10 +17,8 @@ st.markdown(
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-
-      .kkg-card { border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
-      .kkg-imgbox { height:260px; display:flex; align-items:center; justify-content:center; }
-      .kkg-label  { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:8px 0 10px; min-height:22px; }
+      .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
+      .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
       .kkg-table th, .kkg-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
       .kkg-table th { text-align:left; color:#475569; font-weight:600; }
       .muted { color:#6b7280; }
@@ -33,11 +31,15 @@ st.markdown(
 
 CATALOG_PATH = "data/catalog/pdq.json"
 ASSETS_ROOT = "assets/references"
-ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header", "dumpbin"}  # include dumpbin
+
+# include your new folder "dumpbin"
+ALLOWED_DIRS = {"pdq", "dumpbin", "pallet", "sidekick", "endcap", "display", "header"}
+
 LABEL_OVERRIDES = {
     "digital_pdq_tray": "PDQ TRAY",
     "pdq-tray-standard": "PDQ TRAY",
     "dump_bin": "DUMP BIN",
+    "dumpbin": "DUMP BIN",
 }
 
 # ---------- Helpers ----------
@@ -120,30 +122,47 @@ def _round_display_weight(total_lbs: float, policy: Dict) -> str:
     fmt = f"{{:.{decimals}f}}"
     return fmt.format(total_lbs)
 
+def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
+    return [lst[i:i+n] for i in range(0, len(lst), n)]
+
+def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
+    """
+    Keeps tiles aligned by forcing every preview into the same pixel box.
+    - no stretching
+    - preserves aspect ratio
+    - pads with white background
+    """
+    img = Image.open(path).convert("RGBA")
+    # contain within box, then pad to exact size
+    contained = ImageOps.contain(img, (target_w, target_h))
+    padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
+    return padded.convert("RGB")
+
 # ---------- Page header ----------
 st.markdown("## Select the type of display")
 
 # ---------- Gallery ----------
 tiles = scan_pngs()
-if not tiles:
-    st.info(f"No PNGs found. Add images under `{ASSETS_ROOT}/<category>/...` "
-            "(e.g., `assets/references/pdq/digital_pdq_tray.png`).")
-else:
-    # Use as many columns as items (max 3) so row fills cleanly
-    ncols = min(3, max(1, len(tiles)))
-    cols = st.columns(ncols, gap="large")
-    for i, t in enumerate(tiles):
-        with cols[i % ncols]:
-            st.markdown('<div class="kkg-card">', unsafe_allow_html=True)
-            # fixed-height image box keeps cards equal height
-            st.markdown('<div class="kkg-imgbox">', unsafe_allow_html=True)
-            st.image(Image.open(t.path), use_column_width=False, width=320)
-            st.markdown('</div>', unsafe_allow_html=True)
 
-            st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
-            if st.button("Select", key=f"select_{t.key}", use_container_width=True):
-                st.session_state.selected_display_key = t.key
-            st.markdown('</div>', unsafe_allow_html=True)
+if not tiles:
+    st.info(
+        f"No PNGs found. Add images under `{ASSETS_ROOT}/<category>/...` "
+        "(e.g., `assets/references/pdq/digital_pdq_tray.png`)."
+    )
+else:
+    # force 2-per-row so PDQ + DUMP BIN sit together cleanly
+    per_row = 2
+    for row in _chunk(tiles, per_row):
+        cols = st.columns(len(row), gap="large")  # IMPORTANT: no empty columns -> no blank boxes
+        for c, t in zip(cols, row):
+            with c:
+                st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
+                preview = _fixed_preview(t.path, target_w=320, target_h=230)
+                st.image(preview, width=320)
+                st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
+                if st.button("Select", key=f"select_{t.key}", use_container_width=True):
+                    st.session_state.selected_display_key = t.key
+                st.markdown("</div>", unsafe_allow_html=True)
 
 selected_key: Optional[str] = st.session_state.get("selected_display_key")
 
@@ -207,7 +226,6 @@ def render_pdq_form():
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
-    # ---------- Resolution (rules) ----------
     form = st.session_state.form
     rules = catalog.get("rules", {})
 
@@ -261,7 +279,6 @@ def render_pdq_form():
                 if part:
                     resolved.append((part, tqty))
 
-    # ---------- Policy: tiers/weight/complexity ----------
     policy = catalog.get("policy", {})
     qty = int(form.get("quantity", 1) or 1)
 
@@ -301,7 +318,6 @@ def render_pdq_form():
     base_markup = float(policy.get("base_markup", 0.35))
     markup_pct = base_markup + weight_add + complexity_add
 
-    # ---------- Totals ----------
     per_unit_parts_subtotal = 0.0
     for part_key, q in resolved:
         per_unit_parts_subtotal += _parts_value(catalog, part_key) * q
@@ -310,7 +326,6 @@ def render_pdq_form():
     program_base = per_unit_after_tier * qty
     final_total = program_base * (1.0 + markup_pct)
 
-    # ---------- UI: Derived Preview ----------
     left, right = st.columns([0.58, 0.42], gap="large")
 
     with left:
@@ -323,12 +338,7 @@ def render_pdq_form():
                 unit_val = _parts_value(catalog, part_key)
                 line = unit_val * q
                 label = catalog.get("parts", {}).get(part_key, {}).get("label", part_key)
-                rows.append({
-                    "Part": label,
-                    "Qty": q,
-                    "Unit $": f"{unit_val:,.2f}",
-                    "Line $": f"{line:,.2f}",
-                })
+                rows.append({"Part": label, "Qty": q, "Unit $": f"{unit_val:,.2f}", "Line $": f"{line:,.2f}"})
             df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])
             st.table(df)
 
