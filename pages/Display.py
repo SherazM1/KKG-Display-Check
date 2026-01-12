@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
-
 import streamlit as st
 from PIL import Image
 
@@ -32,8 +31,12 @@ st.markdown(
 
 CATALOG_PATH = "data/catalog/pdq.json"
 ASSETS_ROOT = "assets/references"
-ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header"}
-LABEL_OVERRIDES = {"digital_pdq_tray": "PDQ TRAY", "pdq-tray-standard": "PDQ TRAY"}
+ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header", "dumpbin"}  # ← added dumpbin
+LABEL_OVERRIDES = {
+    "digital_pdq_tray": "PDQ TRAY",
+    "pdq-tray-standard": "PDQ TRAY",
+    "dump_bin": "DUMP BIN",  # ← pretty label for dumpbin/dump_bin.png
+}
 
 # ---------- Helpers ----------
 def load_catalog(path: str) -> Dict:
@@ -110,7 +113,6 @@ def _round_display_weight(total_lbs: float, policy: Dict) -> str:
         step = float(step)
     except Exception:
         step = 0.01
-    # derive decimals from step like 0.01 -> 2
     s = f"{step:.10f}".rstrip("0").rstrip(".")
     decimals = len(s.split(".")[1]) if "." in s else 0
     fmt = f"{{:.{decimals}f}}"
@@ -144,11 +146,9 @@ def render_pdq_form():
     st.divider()
     st.subheader("PDQ TRAY — Configuration")
 
-    # Minimal state bag
     if "form" not in st.session_state:
         st.session_state.form = {}
 
-    # Render controls by catalog order
     controls = catalog.get("controls", [])
     for ctrl in controls:
         cid = ctrl.get("id")
@@ -156,7 +156,6 @@ def render_pdq_form():
         label = ctrl.get("label")
         key = f"pdq__{cid}"
 
-        # Only show touches when assembly-turnkey (why: UX clarity, avoids confusion)
         if cid == "product_touches":
             assembly_key = st.session_state.form.get("assembly")
             if assembly_key != "assembly-turnkey":
@@ -189,7 +188,6 @@ def render_pdq_form():
                 st.session_state.form[cid] = int(val)
 
             elif cid == "unit_weight_value":
-                # float weight input (oz or lb)
                 default = float(saved) if saved is not None else 0.0
                 val = st.number_input(label, min_value=0.0, step=0.01, value=float(default), format="%.2f", key=key)
                 st.session_state.form[cid] = float(val)
@@ -205,20 +203,17 @@ def render_pdq_form():
     form = st.session_state.form
     rules = catalog.get("rules", {})
 
-    resolved: List[Tuple[str, int]] = []  # (part_key, qty)
+    resolved: List[Tuple[str, int]] = []
 
-    # footprint dims
     fp_key = form.get("footprint")
     width_in, depth_in = _footprint_dims(catalog, fp_key) if fp_key else (None, None)
 
-    # footprint base
     if "resolve_footprint_base" in rules and fp_key:
         r = rules["resolve_footprint_base"]
         base_part = r.get("map", {}).get(fp_key)
         if base_part:
             resolved.append((base_part, 1))
 
-    # header
     if "resolve_header" in rules:
         r = rules["resolve_header"]
         if form.get(r.get("when_control")) == r.get("when_value"):
@@ -231,7 +226,6 @@ def render_pdq_form():
         if part:
             resolved.append((part, 1))
 
-    # dividers
     if "resolve_dividers" in rules:
         r = rules["resolve_dividers"]
         qty_ctrl = r.get("quantity_control")
@@ -242,7 +236,6 @@ def render_pdq_form():
         if part and dqty > 0:
             resolved.append((part, dqty))
 
-    # shipper
     if "resolve_shipper" in rules:
         r = rules["resolve_shipper"]
         if form.get(r.get("when_control")) == r.get("when_value"):
@@ -250,7 +243,6 @@ def render_pdq_form():
             if part:
                 resolved.append((part, 1))
 
-    # assembly touches
     if "resolve_assembly_touches" in rules:
         r = rules["resolve_assembly_touches"]
         if form.get(r.get("when_control")) == r.get("when_value"):
@@ -265,7 +257,6 @@ def render_pdq_form():
     policy = catalog.get("policy", {})
     qty = int(form.get("quantity", 1) or 1)
 
-    # unit tiers (per-unit)
     unit_factor = 1.0
     for band in policy.get("unit_tiers", []):
         min_q = int(band.get("min_qty", 0))
@@ -281,13 +272,11 @@ def render_pdq_form():
                 if qty >= min_q and qty < int(max_q):
                     unit_factor = float(band.get("factor", 1.0))
 
-    # weight (convert to lb if oz)
     unit_weight_unit = form.get("unit_weight_unit", "lb")
     unit_weight_val = float(form.get("unit_weight_value", 0) or 0)
-    unit_lb = unit_weight_val / 16.0 if unit_weight_unit == "oz" else unit_weight_val  # <- conversion for markup rules
+    unit_lb = unit_weight_val / 16.0 if unit_weight_unit == "oz" else unit_weight_val
     total_lbs = unit_lb * qty
 
-    # weight add %
     weight_add = 0.0
     for bucket in policy.get("weight_tiers", []):
         min_l = float(bucket.get("min_lbs", 0))
@@ -299,7 +288,6 @@ def render_pdq_form():
             if total_lbs >= min_l and total_lbs <= float(max_l):
                 weight_add = float(bucket.get("add", 0))
 
-    # complexity add %
     cx_key = form.get("complexity_level", "cx-low")
     complexity_add = float(policy.get("complexity_add", {}).get(cx_key, 0.0))
     base_markup = float(policy.get("base_markup", 0.35))
@@ -328,14 +316,13 @@ def render_pdq_form():
                 line = unit_val * q
                 label = catalog.get("parts", {}).get(part_key, {}).get("label", part_key)
                 rows.append({
-                "Part": label,
-                "Qty": q,
-                "Unit $": f"{unit_val:,.2f}",
-                "Line $": f"{line:,.2f}",
+                    "Part": label,
+                    "Qty": q,
+                    "Unit $": f"{unit_val:,.2f}",
+                    "Line $": f"{line:,.2f}",
                 })
             df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])
             st.table(df)
-
 
         st.markdown("#### Unit tier match")
         st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")
