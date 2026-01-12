@@ -17,8 +17,10 @@ st.markdown(
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-      .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:10px; }
-      .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:6px 0 8px; }
+
+      .kkg-card { border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
+      .kkg-imgbox { height:260px; display:flex; align-items:center; justify-content:center; }
+      .kkg-label  { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:8px 0 10px; min-height:22px; }
       .kkg-table th, .kkg-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
       .kkg-table th { text-align:left; color:#475569; font-weight:600; }
       .muted { color:#6b7280; }
@@ -31,11 +33,11 @@ st.markdown(
 
 CATALOG_PATH = "data/catalog/pdq.json"
 ASSETS_ROOT = "assets/references"
-ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header", "dumpbin"}  # ← added dumpbin
+ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header", "dumpbin"}  # include dumpbin
 LABEL_OVERRIDES = {
     "digital_pdq_tray": "PDQ TRAY",
     "pdq-tray-standard": "PDQ TRAY",
-    "dump_bin": "DUMP BIN",  # ← pretty label for dumpbin/dump_bin.png
+    "dump_bin": "DUMP BIN",
 }
 
 # ---------- Helpers ----------
@@ -127,11 +129,17 @@ if not tiles:
     st.info(f"No PNGs found. Add images under `{ASSETS_ROOT}/<category>/...` "
             "(e.g., `assets/references/pdq/digital_pdq_tray.png`).")
 else:
-    cols = st.columns(3, gap="large")
+    # Use as many columns as items (max 3) so row fills cleanly
+    ncols = min(3, max(1, len(tiles)))
+    cols = st.columns(ncols, gap="large")
     for i, t in enumerate(tiles):
-        with cols[i % 3]:
-            st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
+        with cols[i % ncols]:
+            st.markdown('<div class="kkg-card">', unsafe_allow_html=True)
+            # fixed-height image box keeps cards equal height
+            st.markdown('<div class="kkg-imgbox">', unsafe_allow_html=True)
             st.image(Image.open(t.path), use_column_width=False, width=320)
+            st.markdown('</div>', unsafe_allow_html=True)
+
             st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
             if st.button("Select", key=f"select_{t.key}", use_container_width=True):
                 st.session_state.selected_display_key = t.key
