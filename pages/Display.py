@@ -360,10 +360,10 @@ def render_pdq_form():
 
     with right:
         st.markdown("#### Totals")
-        st.write(f"Per-unit parts subtotal: **${per_unit_parts_subtotal:,.2f}**")
-        st.write(f"Per-unit after tier: **${per_unit_after_tier:,.2f}**")
-        st.write(f"Program base (pre-markup): **${program_base:,.2f}**")
-        st.write(f"Final (post-markup): **${final_total:,.2f}**")
+        st.write(f"Per-unit price (before quantity discount): **${per_unit_parts_subtotal:,.2f}**")
+        st.write(f"Per-unit price (after quantity discount): **${per_unit_after_tier:,.2f}**")
+        st.write(f"Program base (before complexity and weight markup): **${program_base:,.2f}**")
+        st.write(f"Final price (After everything)): **${final_total:,.2f}**")
 
     st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
