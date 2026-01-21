@@ -196,6 +196,7 @@ def render_wc_grid(
         - Single active cell at a time (stored in st.session_state[key] as idx 0..8).
         - Uses button labels only for accessibility; text is visually hidden.
         - Styling is scoped via aria-label prefix so it won't affect other buttons.
+        - Layout is fixed-width and uses zero-gaps so tiles touch (no whitespace).
     """
     cell_px = max(40, int(size_px) // 3)
     size_px = cell_px * 3
@@ -206,12 +207,27 @@ def render_wc_grid(
 
     aria_prefix = f"__wcgrid__{key}__"
     selected_aria = f"{aria_prefix}{selected_idx}"
+    wrap_class = f"wc-wrap-{key}"
 
     st.markdown(
         f"""
         <style>
-          /* Scope: only buttons whose aria-label starts with our unique prefix */
-          button[aria-label^="{aria_prefix}"] {{
+          /* Scope all layout tightening to this grid only */
+          .{wrap_class} div[data-testid="stHorizontalBlock"] {{
+            gap: 0 !important;
+          }}
+          .{wrap_class} div[data-testid="column"] {{
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }}
+          .{wrap_class} div[data-testid="stButton"] {{
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+          }}
+
+          /* Tile buttons */
+          .{wrap_class} button[aria-label^="{aria_prefix}"] {{
             width: {cell_px}px !important;
             height: {cell_px}px !important;
             padding: 0 !important;
@@ -220,35 +236,33 @@ def render_wc_grid(
             border: 2px solid #111827 !important;
             background: #ffffff !important;
             box-shadow: none !important;
-            font-size: 0 !important; /* hide label text visually */
+            font-size: 0 !important;
             line-height: 0 !important;
+            min-height: {cell_px}px !important;
           }}
 
-          button[aria-label^="{aria_prefix}"]:hover {{
+          /* Hide any inner content so labels don't show */
+          .{wrap_class} button[aria-label^="{aria_prefix}"] * {{
+            display: none !important;
+          }}
+
+          .{wrap_class} button[aria-label^="{aria_prefix}"]:hover {{
             background: #f3f4f6 !important;
           }}
 
-          /* Selected state (reliable: no :has()) */
-          button[aria-label="{selected_aria}"] {{
+          .{wrap_class} button[aria-label="{selected_aria}"] {{
             background: #e5e7eb !important;
             outline: 2px solid #111827 !important;
             outline-offset: -2px !important;
           }}
 
-          /* Make buttons feel like tiles */
-          button[aria-label^="{aria_prefix}"]:focus {{
+          .{wrap_class} button[aria-label^="{aria_prefix}"]:focus {{
             outline: 2px solid #111827 !important;
             outline-offset: -2px !important;
           }}
 
           /* Axis labels */
-          .wc-axis-wrap {{
-            display: flex;
-            align-items: flex-start;
-            gap: 14px;
-            margin: 8px 0 6px;
-          }}
-          .wc-y {{
+          .{wrap_class} .wc-y {{
             display: flex;
             align-items: center;
             justify-content: center;
@@ -259,7 +273,7 @@ def render_wc_grid(
             user-select: none;
             padding: 0 6px;
           }}
-          .wc-x {{
+          .{wrap_class} .wc-x {{
             width: {size_px}px;
             text-align: center;
             margin-top: 10px;
@@ -267,39 +281,31 @@ def render_wc_grid(
             color: #111827;
             user-select: none;
           }}
-
-          /* Tighten Streamlit button containers inside columns */
-          div[data-testid="stButton"] {{
-            display: flex;
-            justify-content: center;
-          }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    left, right = st.columns([0.10, 0.90], gap="small")
+    left, right = st.columns([0.10, 0.90], gap=None)
     with left:
-        st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='{wrap_class} wc-y'>Weight</div>", unsafe_allow_html=True)
 
     with right:
-        # Build the 3×3 grid
-        for r in range(3):
-            cols = st.columns(3, gap="small")
-            for c in range(3):
-                idx = r * 3 + c
-                aria_label = f"{aria_prefix}{idx}"
-                with cols[c]:
-                    clicked = st.button(
-                        aria_label,
-                        key=f"{key}__btn__{idx}",
-                        use_container_width=False,
-                    )
-                    if clicked:
-                        st.session_state[key] = idx
-                        selected_idx = idx  # immediate local update for same-run logic
+        st.markdown(f"<div class='{wrap_class}'>", unsafe_allow_html=True)
+
+        grid_col, _ = st.columns([size_px, 1], gap=None)
+        with grid_col:
+            for rr in range(3):
+                cols = st.columns(3, gap=None)
+                for cc in range(3):
+                    idx = rr * 3 + cc
+                    aria_label = f"{aria_prefix}{idx}"
+                    with cols[cc]:
+                        if st.button(aria_label, key=f"{key}__btn__{idx}", use_container_width=False):
+                            st.session_state[key] = idx
 
         st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
     return int(r), int(c)
