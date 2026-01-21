@@ -189,10 +189,12 @@ def render_wc_grid(
     """
     3×3 tile grid using Streamlit containers (stable), single-select.
     - No header inside (caller controls headings)
-    - Weight label left, Complexity label bottom
-    - Compact, square tiles, no giant whitespace
+    - Weight label tight on the left
+    - Complexity centered directly under grid
+    - Compact, square-ish tiles
     """
-    cell_px = max(72, int(size_px) // 3)  # smaller + still fits a button
+    cell_px = max(72, int(size_px) // 3)  # smaller tiles
+    grid_w_px = cell_px * 3
     grid_h_px = cell_px * 3
 
     default_idx = int(default_rc[0] * 3 + default_rc[1])
@@ -212,22 +214,19 @@ def render_wc_grid(
             writing-mode: vertical-rl;
             transform: rotate(180deg);
             user-select: none;
+            margin-right: -10px; /* pull label closer */
           }}
           .wc-x {{
-            width: {cell_px * 3}px;
+            width: {grid_w_px}px;
             text-align: center;
-            margin-top: 8px;
+            margin-top: 6px;
             font-weight: 700;
             color: #111827;
             user-select: none;
           }}
-          /* Make the tile border look clean and consistent */
-          div[data-testid="stVerticalBlockBorderWrapper"] {{
-            border-radius: 10px !important;
-          }}
-          /* Keep buttons compact inside tiles */
+          /* compact button so tile stays square */
           div[data-testid="stButton"] button {{
-            padding: 0.25rem 0.5rem !important;
+            padding: 0.2rem 0.5rem !important;
             font-weight: 700 !important;
           }}
         </style>
@@ -235,25 +234,29 @@ def render_wc_grid(
         unsafe_allow_html=True,
     )
 
-    left, right = st.columns([0.08, 0.92], gap="small")
+    # Make the left label column narrower + reduce gap
+    left, right = st.columns([0.05, 0.95], gap="xxsmall")
     with left:
         st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
 
     with right:
-        for rr in range(3):
-            cols = st.columns(3, gap="small")
-            for cc in range(3):
-                idx = rr * 3 + cc
-                with cols[cc]:
-                    tile = st.container(border=True, height=cell_px)
-                    with tile:
-                        is_selected = idx == selected_idx
-                        btn_label = "Selected" if is_selected else "Select"
-                        if st.button(btn_label, key=f"{key}__tile__{idx}", use_container_width=True):
-                            st.session_state[key] = idx
-                            selected_idx = idx
+        # Constrain the grid to a fixed width so it doesn't stretch (keeps Complexity centered)
+        grid_wrap, _ = st.columns([grid_w_px, 1], gap="xxsmall")
+        with grid_wrap:
+            for rr in range(3):
+                cols = st.columns(3, gap="xxsmall")
+                for cc in range(3):
+                    idx = rr * 3 + cc
+                    with cols[cc]:
+                        tile = st.container(border=True, height=cell_px)
+                        with tile:
+                            is_selected = idx == selected_idx
+                            btn_label = "Selected" if is_selected else "Select"
+                            if st.button(btn_label, key=f"{key}__tile__{idx}", use_container_width=True):
+                                st.session_state[key] = idx
+                                selected_idx = idx
 
-        st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
+            st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
     return int(r), int(c)
