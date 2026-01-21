@@ -1,5 +1,6 @@
 # pages/Display.py
-# Catalog-driven PDQ UI + rule resolution + preview (includes footprint base; float weight input)
+# Catalog-driven PDQ UI + rule resolution + preview
+# Markup is driven strictly by policy.matrix_markups[row][col] from the 3x3 grid selection.
 
 from __future__ import annotations
 
@@ -16,6 +17,22 @@ from PIL import Image, ImageOps
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
+st.markdown(
+    textwrap.dedent(
+        """
+        <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+          html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
+          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
+          .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
+          .kkg-table th, .kkg-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
+          .kkg-table th { text-align:left; color:#475569; font-weight:600; }
+          .muted { color:#6b7280; }
+        </style>
+        """
+    ),
+    unsafe_allow_html=True,
+)
 
 CATALOG_PATH = "data/catalog/pdq.json"
 ASSETS_ROOT = "assets/references"
@@ -30,7 +47,7 @@ LABEL_OVERRIDES = {
 }
 
 
-# ---------- Helpers ----------
+# ---------- Catalog helpers ----------
 def load_catalog(path: str) -> Dict:
     if not os.path.isfile(path):
         st.error(f"Catalog not found at `{path}`. Add `data/catalog/pdq.json` and reload.")
@@ -41,44 +58,6 @@ def load_catalog(path: str) -> Dict:
     except Exception as e:
         st.error(f"Failed to parse `{path}`: {e}")
         st.stop()
-
-
-@dataclass
-class OptionTile:
-    key: str
-    label: str
-    path: str
-    category: str
-
-
-def _prettify(stem: str) -> str:
-    if stem in LABEL_OVERRIDES:
-        return LABEL_OVERRIDES[stem]
-    s = stem.replace("_", " ").replace("-", " ").strip()
-    return " ".join(w.capitalize() for w in s.split())
-
-
-def scan_pngs() -> List[OptionTile]:
-    opts: List[OptionTile] = []
-    if not os.path.isdir(ASSETS_ROOT):
-        return opts
-    for cat in sorted(os.listdir(ASSETS_ROOT)):
-        cat_path = os.path.join(ASSETS_ROOT, cat)
-        if not (os.path.isdir(cat_path) and cat in ALLOWED_DIRS):
-            continue
-        for fname in sorted(os.listdir(cat_path)):
-            if not fname.lower().endswith(".png"):
-                continue
-            if fname.lower().startswith(("kkg-logo", "logo")):
-                continue
-            stem, _ = os.path.splitext(fname)
-            path = os.path.join(cat_path, fname)
-            try:
-                Image.open(path).close()
-            except Exception:
-                continue
-            opts.append(OptionTile(key=f"{cat}/{stem}", label=_prettify(stem), path=path, category=cat))
-    return opts
 
 
 def _find_control(catalog: Dict, control_id: str) -> Optional[Dict]:
@@ -106,16 +85,48 @@ def _parts_value(catalog: Dict, part_key: str) -> float:
         return 0.0
 
 
-def _round_display_weight(total_lbs: float, policy: Dict) -> str:
-    step = policy.get("display_weight_round", 0.01)
-    try:
-        step = float(step)
-    except Exception:
-        step = 0.01
-    s = f"{step:.10f}".rstrip("0").rstrip(".")
-    decimals = len(s.split(".")[1]) if "." in s else 0
-    fmt = f"{{:.{decimals}f}}"
-    return fmt.format(total_lbs)
+# ---------- UI tile helpers ----------
+@dataclass
+class OptionTile:
+    key: str
+    label: str
+    path: str
+    category: str
+
+
+def _prettify(stem: str) -> str:
+    if stem in LABEL_OVERRIDES:
+        return LABEL_OVERRIDES[stem]
+    s = stem.replace("_", " ").replace("-", " ").strip()
+    return " ".join(w.capitalize() for w in s.split())
+
+
+def scan_pngs() -> List[OptionTile]:
+    opts: List[OptionTile] = []
+    if not os.path.isdir(ASSETS_ROOT):
+        return opts
+
+    for cat in sorted(os.listdir(ASSETS_ROOT)):
+        cat_path = os.path.join(ASSETS_ROOT, cat)
+        if not (os.path.isdir(cat_path) and cat in ALLOWED_DIRS):
+            continue
+
+        for fname in sorted(os.listdir(cat_path)):
+            if not fname.lower().endswith(".png"):
+                continue
+            if fname.lower().startswith(("kkg-logo", "logo")):
+                continue
+
+            stem, _ = os.path.splitext(fname)
+            path = os.path.join(cat_path, fname)
+            try:
+                Image.open(path).close()
+            except Exception:
+                continue
+
+            opts.append(OptionTile(key=f"{cat}/{stem}", label=_prettify(stem), path=path, category=cat))
+
+    return opts
 
 
 def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
@@ -123,18 +134,14 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
 
 
 def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
-    """
-    Keeps tiles aligned by forcing every preview into the same pixel box.
-    - no stretching
-    - preserves aspect ratio
-    - pads with white background
-    """
+    """Fixed-size preview without stretching (contain + pad)."""
     img = Image.open(path).convert("RGBA")
     contained = ImageOps.contain(img, (target_w, target_h))
     padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
     return padded.convert("RGB")
 
 
+# ---------- Query param + matrix component ----------
 def _get_query_param(name: str) -> Optional[str]:
     try:
         qp = st.query_params
@@ -155,22 +162,18 @@ def _get_query_param(name: str) -> Optional[str]:
 
 def _parse_rc(value: str) -> Optional[Tuple[int, int]]:
     try:
-        parts = value.split(",")
-        if len(parts) != 2:
-            return None
-        r = int(parts[0].strip())
-        c = int(parts[1].strip())
-        if r not in (0, 1, 2) or c not in (0, 1, 2):
-            return None
-        return r, c
+        r_s, c_s = [p.strip() for p in value.split(",")]
+        r, c = int(r_s), int(c_s)
+        if r in (0, 1, 2) and c in (0, 1, 2):
+            return r, c
+        return None
     except Exception:
         return None
 
 
 def render_weight_complexity_matrix_component(
     key: str = "wc",
-    bottom_row_labels: Tuple[str, str, str] = ("25%", "35%", "45%"),
-    default: Tuple[int, int] = (0, 0),
+    default: Tuple[int, int] = (1, 1),
     size_px: int = 420,
 ) -> Tuple[int, int]:
     """
@@ -182,6 +185,9 @@ def render_weight_complexity_matrix_component(
 
     Clicking:
       - JS updates parent URL query param and navigates (forces rerun + persists).
+
+    Visual:
+      - No % labels rendered.
     """
     qp_val = _get_query_param(key)
     qp_rc = _parse_rc(qp_val) if qp_val else None
@@ -193,9 +199,7 @@ def render_weight_complexity_matrix_component(
 
     r_sel, c_sel = st.session_state[key]
 
-    lbl0, lbl1, lbl2 = bottom_row_labels
     height_px = size_px + 70
-
     html = textwrap.dedent(
         f"""
         <div class="wc-wrap" style="--size:{size_px}px;">
@@ -211,9 +215,9 @@ def render_weight_complexity_matrix_component(
               <div class="wc-cell" data-r="1" data-c="1"></div>
               <div class="wc-cell" data-r="1" data-c="2"></div>
 
-              <div class="wc-cell" data-r="2" data-c="0"><span class="wc-txt">{lbl0}</span></div>
-              <div class="wc-cell" data-r="2" data-c="1"><span class="wc-txt">{lbl1}</span></div>
-              <div class="wc-cell" data-r="2" data-c="2"><span class="wc-txt">{lbl2}</span></div>
+              <div class="wc-cell" data-r="2" data-c="0"></div>
+              <div class="wc-cell" data-r="2" data-c="1"></div>
+              <div class="wc-cell" data-r="2" data-c="2"></div>
             </div>
 
             <div class="wc-x">Complexity</div>
@@ -263,24 +267,12 @@ def render_weight_complexity_matrix_component(
             background:#ffffff;
             cursor:pointer;
             position:relative;
-            display:flex;
-            align-items:flex-end;
-            justify-content:flex-start;
-            padding: 10px 12px;
             user-select:none;
           }}
           .wc-cell[data-c="2"] {{ border-right: none; }}
           .wc-cell[data-r="2"] {{ border-bottom: none; }}
 
-          .wc-txt {{
-            font-weight:700;
-            color:#1f2937;
-            letter-spacing:0.2px;
-          }}
-
-          .wc-cell:hover {{
-            background:#f3f4f6;
-          }}
+          .wc-cell:hover {{ background:#f3f4f6; }}
 
           .wc-cell.wc-selected {{
             background:#e5e7eb;
@@ -314,8 +306,9 @@ def render_weight_complexity_matrix_component(
               document.querySelectorAll('.wc-cell').forEach(el => {{
                 const r = Number(el.dataset.r);
                 const c = Number(el.dataset.c);
-                el.classList.toggle('wc-selected', r === selected.r && c === selected.c);
-                el.setAttribute('aria-selected', (r === selected.r && c === selected.c) ? 'true' : 'false');
+                const on = (r === selected.r && c === selected.c);
+                el.classList.toggle('wc-selected', on);
+                el.setAttribute('aria-selected', on ? 'true' : 'false');
               }});
             }}
 
@@ -343,26 +336,119 @@ def render_weight_complexity_matrix_component(
     return st.session_state[key]
 
 
+# ---------- Pricing helpers ----------
+def _unit_factor(policy: Dict, qty: int) -> float:
+    unit_factor = 1.0
+    for band in policy.get("unit_tiers", []) or []:
+        min_q = int(band.get("min_qty", 0) or 0)
+        max_q = band.get("max_qty")
+        factor = float(band.get("factor", 1.0) or 1.0)
+
+        if max_q is None:
+            if qty >= min_q:
+                unit_factor = factor
+            continue
+
+        max_q_i = int(max_q)
+        inclusive = (policy.get("tier_boundary", "inclusive") == "inclusive")
+        if inclusive and (qty >= min_q and qty <= max_q_i):
+            unit_factor = factor
+        if not inclusive and (qty >= min_q and qty < max_q_i):
+            unit_factor = factor
+
+    return float(unit_factor)
+
+
+def _matrix_markup_pct(policy: Dict, rc: Tuple[int, int], fallback: float = 0.35) -> float:
+    """
+    Reads markup strictly from policy.matrix_markups[r][c].
+    Expects decimals (0.35 == 35%).
+    """
+    r, c = rc
+    grid = policy.get("matrix_markups")
+    if not isinstance(grid, list) or len(grid) != 3:
+        return fallback
+
+    try:
+        row = grid[r]
+        if not isinstance(row, list) or len(row) != 3:
+            return fallback
+        val = float(row[c])
+        if val < 0:
+            return fallback
+        return val
+    except Exception:
+        return fallback
+
+
+def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
+    rules = catalog.get("rules", {}) or {}
+    resolved: List[Tuple[str, int]] = []
+
+    fp_key = form.get("footprint")
+    width_in, depth_in = _footprint_dims(catalog, fp_key) if fp_key else (None, None)
+
+    if fp_key and "resolve_footprint_base" in rules:
+        r = rules["resolve_footprint_base"]
+        base_part = (r.get("map", {}) or {}).get(fp_key)
+        if base_part:
+            resolved.append((base_part, 1))
+
+    if "resolve_header" in rules:
+        r = rules["resolve_header"]
+        part = r.get("else")
+        if form.get(r.get("when_control")) == r.get("when_value"):
+            if r.get("match_on_dim") == "width_in" and width_in is not None:
+                part = (r.get("map", {}) or {}).get(str(width_in), r.get("else"))
+        if part:
+            resolved.append((part, 1))
+
+    if "resolve_dividers" in rules:
+        r = rules["resolve_dividers"]
+        qty_ctrl = r.get("quantity_control")
+        dqty = int(form.get(qty_ctrl, 0) or 0)
+        if dqty > 0 and r.get("match_on_dim") == "depth_in" and depth_in is not None:
+            part = (r.get("map", {}) or {}).get(str(depth_in), r.get("else"))
+            if part:
+                resolved.append((part, dqty))
+
+    if "resolve_shipper" in rules:
+        r = rules["resolve_shipper"]
+        if form.get(r.get("when_control")) == r.get("when_value"):
+            part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+            if part:
+                resolved.append((part, 1))
+
+    if "resolve_assembly_touches" in rules:
+        r = rules["resolve_assembly_touches"]
+        if form.get(r.get("when_control")) == r.get("when_value"):
+            tq_ctrl = r.get("quantity_control")
+            tqty = int(form.get(tq_ctrl, 0) or 0)
+            if tqty >= int(r.get("min_quantity", 1) or 1):
+                part = r.get("part")
+                if part:
+                    resolved.append((part, tqty))
+
+    return resolved
+
+
 # ---------- Page header ----------
 st.markdown("## Select the type of display")
 
 # ---------- Gallery ----------
 tiles = scan_pngs()
-
 if not tiles:
     st.info(
         f"No PNGs found. Add images under `{ASSETS_ROOT}/<category>/...` "
         "(e.g., `assets/references/pdq/digital_pdq_tray.png`)."
     )
 else:
-    per_row = 2
-    for row in _chunk(tiles, per_row):
+    for row in _chunk(tiles, 2):
         cols = st.columns(len(row), gap="large")
         for c, t in zip(cols, row):
             with c:
                 st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
-                preview = _fixed_preview(t.path, target_w=320, target_h=230)
-                st.image(preview, width=320)
+                st.image(_fixed_preview(t.path, target_w=320, target_h=230), width=320)
                 st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
                 if st.button("Select", key=f"select_{t.key}", use_container_width=True):
                     st.session_state.selected_display_key = t.key
@@ -372,165 +458,81 @@ selected_key: Optional[str] = st.session_state.get("selected_display_key")
 
 
 # ---------- PDQ FORM (catalog-driven) ----------
-def render_pdq_form():
+def render_pdq_form() -> None:
     catalog = load_catalog(CATALOG_PATH)
+    policy = catalog.get("policy", {}) or {}
 
     st.divider()
     st.subheader("PDQ TRAY — Configuration")
 
     if "form" not in st.session_state:
         st.session_state.form = {}
+    form = st.session_state.form
 
-    controls = catalog.get("controls", [])
-    for ctrl in controls:
+    for ctrl in catalog.get("controls", []) or []:
         cid = ctrl.get("id")
         ctype = ctrl.get("type")
         label = ctrl.get("label")
-        key = f"pdq__{cid}"
+        widget_key = f"pdq__{cid}"
 
+        # Controls removed from the current UI (kept in catalog for now)
         if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
             continue
 
         if cid == "product_touches":
-            assembly_key = st.session_state.form.get("assembly")
-            if assembly_key != "assembly-turnkey":
-                st.session_state.form.pop("product_touches", None)
+            if form.get("assembly") != "assembly-turnkey":
+                form.pop("product_touches", None)
                 continue
 
         if ctype == "single":
-            opts = ctrl.get("options", [])
+            opts = ctrl.get("options", []) or []
             labels = [o.get("label") for o in opts]
             keys = [o.get("key") for o in opts]
 
             default_idx = 0
-            if cid in st.session_state.form and st.session_state.form[cid] in keys:
-                default_idx = keys.index(st.session_state.form[cid])
+            if cid in form and form[cid] in keys:
+                default_idx = keys.index(form[cid])
 
             if len(labels) <= 3:
-                choice = st.radio(label, labels, index=default_idx, key=key, horizontal=True)
+                choice = st.radio(label, labels, index=default_idx, key=widget_key, horizontal=True)
             else:
-                choice = st.selectbox(label, labels, index=default_idx, key=key)
+                choice = st.selectbox(label, labels, index=default_idx, key=widget_key)
 
-            st.session_state.form[cid] = keys[labels.index(choice)]
+            form[cid] = keys[labels.index(choice)]
+            continue
 
-        elif ctype == "number":
+        if ctype == "number":
             min_v = ctrl.get("min", 0)
-            saved = st.session_state.form.get(cid)
+            saved = form.get(cid)
 
             if cid in ("quantity", "divider_count", "product_touches"):
-                default = int(saved) if saved is not None else (max(1, min_v) if cid == "quantity" else int(min_v))
-                val = st.number_input(label, min_value=int(min_v), step=1, value=int(default), key=key)
-                st.session_state.form[cid] = int(val)
+                default = int(saved) if saved is not None else (max(1, int(min_v)) if cid == "quantity" else int(min_v))
+                val = st.number_input(label, min_value=int(min_v), step=1, value=int(default), key=widget_key)
+                form[cid] = int(val)
             else:
                 default = float(saved) if saved is not None else float(min_v)
-                val = st.number_input(label, min_value=float(min_v), step=0.01, value=float(default), key=key)
-                st.session_state.form[cid] = float(val)
-        else:
-            st.caption(f"Unsupported control type: {ctype} for `{cid}`")
+                val = st.number_input(label, min_value=float(min_v), step=0.01, value=float(default), key=widget_key)
+                form[cid] = float(val)
+            continue
 
+        st.caption(f"Unsupported control type: {ctype} for `{cid}`")
+
+    # ---- Grid-driven markup (ONLY source of markup) ----
     st.markdown("#### Select Weight Tier and Complexity Level")
+    selected_rc = render_weight_complexity_matrix_component(key="wc", default=(1, 1), size_px=420)
 
-    selected_rc = render_weight_complexity_matrix_component(
-        key="wc",
-        bottom_row_labels=("25%", "35%", "45%"),
-        default=(0, 0),
-        size_px=420,
-    )
+    # ---- Resolve parts and compute totals ----
+    resolved = _resolve_parts_per_unit(catalog, form)
 
-    grid_factor_by_rc = {
-        (0, 0): 1.00,
-        (0, 1): 1.05,
-        (0, 2): 1.10,
-        (1, 0): 1.05,
-        (1, 1): 1.10,
-        (1, 2): 1.15,
-        (2, 0): 1.10,
-        (2, 1): 1.15,
-        (2, 2): 1.20,
-    }
-
-    form = st.session_state.form
-    rules = catalog.get("rules", {})
-
-    resolved: List[Tuple[str, int]] = []
-
-    fp_key = form.get("footprint")
-    width_in, depth_in = _footprint_dims(catalog, fp_key) if fp_key else (None, None)
-
-    if "resolve_footprint_base" in rules and fp_key:
-        r = rules["resolve_footprint_base"]
-        base_part = r.get("map", {}).get(fp_key)
-        if base_part:
-            resolved.append((base_part, 1))
-
-    if "resolve_header" in rules:
-        r = rules["resolve_header"]
-        if form.get(r.get("when_control")) == r.get("when_value"):
-            if r.get("match_on_dim") == "width_in" and width_in is not None:
-                part = r.get("map", {}).get(str(width_in), r.get("else"))
-            else:
-                part = r.get("else")
-        else:
-            part = r.get("else")
-        if part:
-            resolved.append((part, 1))
-
-    if "resolve_dividers" in rules:
-        r = rules["resolve_dividers"]
-        qty_ctrl = r.get("quantity_control")
-        dqty = int(form.get(qty_ctrl, 0) or 0)
-        part = None
-        if dqty > 0 and r.get("match_on_dim") == "depth_in" and depth_in is not None:
-            part = r.get("map", {}).get(str(depth_in), r.get("else"))
-        if part and dqty > 0:
-            resolved.append((part, dqty))
-
-    if "resolve_shipper" in rules:
-        r = rules["resolve_shipper"]
-        if form.get(r.get("when_control")) == r.get("when_value"):
-            part = r.get("map", {}).get(fp_key, r.get("else"))
-            if part:
-                resolved.append((part, 1))
-
-    if "resolve_assembly_touches" in rules:
-        r = rules["resolve_assembly_touches"]
-        if form.get(r.get("when_control")) == r.get("when_value"):
-            tq_ctrl = r.get("quantity_control")
-            tqty = int(form.get(tq_ctrl, 0) or 0)
-            if tqty >= int(r.get("min_quantity", 1)):
-                part = r.get("part")
-                if part:
-                    resolved.append((part, tqty))
-
-    policy = catalog.get("policy", {})
     qty = int(form.get("quantity", 1) or 1)
+    unit_factor = _unit_factor(policy, qty)
 
-    unit_factor = 1.0
-    for band in policy.get("unit_tiers", []):
-        min_q = int(band.get("min_qty", 0))
-        max_q = band.get("max_qty")
-        if max_q is None:
-            if qty >= min_q:
-                unit_factor = float(band.get("factor", 1.0))
-        else:
-            if policy.get("tier_boundary", "inclusive") == "inclusive":
-                if qty >= min_q and qty <= int(max_q):
-                    unit_factor = float(band.get("factor", 1.0))
-            else:
-                if qty >= min_q and qty < int(max_q):
-                    unit_factor = float(band.get("factor", 1.0))
-
-    base_markup = float(policy.get("base_markup", 0.35))
-
-    grid_factor = float(grid_factor_by_rc.get(tuple(selected_rc), 1.0))
-    markup_pct = base_markup * grid_factor
-
-    per_unit_parts_subtotal = 0.0
-    for part_key, q in resolved:
-        per_unit_parts_subtotal += _parts_value(catalog, part_key) * q
-
+    per_unit_parts_subtotal = sum(_parts_value(catalog, part_key) * q for part_key, q in resolved)
     per_unit_after_tier = per_unit_parts_subtotal * unit_factor
+
     program_base = per_unit_after_tier * qty
+
+    markup_pct = _matrix_markup_pct(policy, tuple(selected_rc), fallback=0.35)
     final_total = program_base * (1.0 + markup_pct)
 
     left, right = st.columns([0.58, 0.42], gap="large")
@@ -546,8 +548,7 @@ def render_pdq_form():
                 line = unit_val * q
                 label = catalog.get("parts", {}).get(part_key, {}).get("label", part_key)
                 rows.append({"Part": label, "Qty": q, "Unit $": f"{unit_val:,.2f}", "Line $": f"{line:,.2f}"})
-            df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])
-            st.table(df)
+            st.table(pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"]))
 
     with right:
         st.markdown("#### Totals")

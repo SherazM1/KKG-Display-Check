@@ -48,7 +48,7 @@
       "required": true,
       "options": [
         { "key": "header-yes", "label": "Yes", "base_value": 0 },
-        { "key": "header-no",  "label": "No",  "base_value": 0 }
+        { "key": "header-no", "label": "No", "base_value": 0 }
       ],
       "notes": "If Yes is chosen, the priced part depends on footprint width: 36\" → header-36, 48\" → header-48."
     },
@@ -67,7 +67,7 @@
       "required": true,
       "options": [
         { "key": "shipper-yes", "label": "Yes", "base_value": 0 },
-        { "key": "shipper-no",  "label": "No",  "base_value": 0 }
+        { "key": "shipper-no", "label": "No", "base_value": 0 }
       ],
       "notes": "Per-unit shipper; if Yes, resolves to a footprint-specific part."
     },
@@ -77,8 +77,8 @@
       "type": "single",
       "required": true,
       "options": [
-        { "key": "assembly-kdf",      "label": "KDF",      "base_value": 0 },
-        { "key": "assembly-turnkey",  "label": "Turnkey",  "base_value": 0 }
+        { "key": "assembly-kdf", "label": "KDF", "base_value": 0 },
+        { "key": "assembly-turnkey", "label": "Turnkey", "base_value": 0 }
       ],
       "notes": "KDF/Turnkey are non-priced switches; only Turnkey with touches adds cost."
     },
@@ -123,31 +123,27 @@
       "type": "single",
       "required": true,
       "options": [
-        { "key": "cx-low",  "label": "Low",    "base_value": 0 },
-        { "key": "cx-med",  "label": "Medium", "base_value": 0 },
-        { "key": "cx-high", "label": "High",   "base_value": 0 }
+        { "key": "cx-low", "label": "Low", "base_value": 0 },
+        { "key": "cx-med", "label": "Medium", "base_value": 0 },
+        { "key": "cx-high", "label": "High", "base_value": 0 }
       ],
       "notes": "Adds 0% / 5% / 10% to the base 35% markup respectively."
     }
   ],
   "parts": {
-    "footprint-fp-36x12": { "label": "Footprint Base (36×12)", "base_value": 1.20 },
-    "footprint-fp-48x12": { "label": "Footprint Base (48×12)", "base_value": 1.40 },
-    "footprint-fp-36x24": { "label": "Footprint Base (36×24)", "base_value": 1.60 },
-    "footprint-fp-48x24": { "label": "Footprint Base (48×24)", "base_value": 1.80 },
-
+    "footprint-fp-36x12": { "label": "Footprint Base (36×12)", "base_value": 1.2 },
+    "footprint-fp-48x12": { "label": "Footprint Base (48×12)", "base_value": 1.4 },
+    "footprint-fp-36x24": { "label": "Footprint Base (36×24)", "base_value": 1.6 },
+    "footprint-fp-48x24": { "label": "Footprint Base (48×24)", "base_value": 1.8 },
     "header-36": { "label": "Header (36\")", "base_value": 0.35 },
     "header-48": { "label": "Header (48\")", "base_value": 0.45 },
     "header-none": { "label": "No Header", "base_value": 0 },
-
     "divider-12": { "label": "Divider (12\" depth)", "base_value": 0.08 },
-    "divider-24": { "label": "Divider (24\" depth)", "base_value": 0.10 },
-
-    "shipper-fp-36x12": { "label": "Shipper (36×12)", "base_value": 0.50 },
-    "shipper-fp-48x12": { "label": "Shipper (48×12)", "base_value": 0.60 },
-    "shipper-fp-36x24": { "label": "Shipper (36×24)", "base_value": 0.70 },
-    "shipper-fp-48x24": { "label": "Shipper (48×24)", "base_value": 0.80 },
-
+    "divider-24": { "label": "Divider (24\" depth)", "base_value": 0.1 },
+    "shipper-fp-36x12": { "label": "Shipper (36×12)", "base_value": 0.5 },
+    "shipper-fp-48x12": { "label": "Shipper (48×12)", "base_value": 0.6 },
+    "shipper-fp-36x24": { "label": "Shipper (36×24)", "base_value": 0.7 },
+    "shipper-fp-48x24": { "label": "Shipper (48×24)", "base_value": 0.8 },
     "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0.12 }
   },
   "rules": {
@@ -165,20 +161,14 @@
       "when_value": "header-yes",
       "based_on_control": "footprint",
       "match_on_dim": "width_in",
-      "map": {
-        "36": "header-36",
-        "48": "header-48"
-      },
+      "map": { "36": "header-36", "48": "header-48" },
       "else": "header-none"
     },
     "resolve_dividers": {
       "quantity_control": "divider_count",
       "based_on_control": "footprint",
       "match_on_dim": "depth_in",
-      "map": {
-        "12": "divider-12",
-        "24": "divider-24"
-      },
+      "map": { "12": "divider-12", "24": "divider-24" },
       "else": null,
       "pricing": "linear"
     },
@@ -205,24 +195,18 @@
     }
   },
   "policy": {
-    "base_markup": 0.35,
-    "weight_tiers": [
-      { "min_lbs": 0,   "max_lbs": 4.999, "add": 0.00 },
-      { "min_lbs": 5,   "max_lbs": 9.999, "add": 0.05 },
-      { "min_lbs": 10,  "max_lbs": null,  "add": 0.10 }
+    "matrix_markups": [
+      [0.35, 0.4, 0.45],
+      [0.3, 0.35, 0.4],
+      [0.25, 0.3, 0.35]
     ],
-    "complexity_add": {
-      "cx-low":  0.00,
-      "cx-med":  0.05,
-      "cx-high": 0.10
-    },
     "unit_tiers": [
-      { "min_qty": 1,     "max_qty": 199,   "factor": 1.00 },
-      { "min_qty": 200,   "max_qty": 499,   "factor": 0.98 },
-      { "min_qty": 500,   "max_qty": 999,   "factor": 0.96 },
-      { "min_qty": 1000,  "max_qty": 1999,  "factor": 0.94 },
-      { "min_qty": 2000,  "max_qty": 2999,  "factor": 0.92 },
-      { "min_qty": 3000,  "max_qty": null,  "factor": 0.90 }
+      { "min_qty": 1, "max_qty": 199, "factor": 1.0 },
+      { "min_qty": 200, "max_qty": 499, "factor": 0.98 },
+      { "min_qty": 500, "max_qty": 999, "factor": 0.96 },
+      { "min_qty": 1000, "max_qty": 1999, "factor": 0.94 },
+      { "min_qty": 2000, "max_qty": 2999, "factor": 0.92 },
+      { "min_qty": 3000, "max_qty": null, "factor": 0.9 }
     ],
     "tier_boundary": "inclusive",
     "display_weight_round": 0.01,
