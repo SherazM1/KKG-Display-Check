@@ -1,6 +1,6 @@
 # pages/Display.py
 # Catalog-driven PDQ UI + rule resolution + preview
-# Markup is driven strictly by policy.matrix_markups[row][col] from the 3x3 grid selection.
+# Markup is driven strictly by policy.matrix_markups[row][col] from the 3x3 selection.
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import os
 import textwrap
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlencode
 
 import pandas as pd
 import streamlit as st
@@ -18,19 +17,15 @@ from PIL import Image, ImageOps
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
 st.markdown(
-    textwrap.dedent(
-        """
-        <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-          html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
-          .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
-          .kkg-table th, .kkg-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
-          .kkg-table th { text-align:left; color:#475569; font-weight:600; }
-          .muted { color:#6b7280; }
-        </style>
-        """
-    ),
+    """
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
+      .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
+      .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
+      .muted { color:#6b7280; }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -47,7 +42,7 @@ LABEL_OVERRIDES = {
 }
 
 
-# ---------- Catalog helpers ----------
+# ---------- Helpers ----------
 def load_catalog(path: str) -> Dict:
     if not os.path.isfile(path):
         st.error(f"Catalog not found at `{path}`. Add `data/catalog/pdq.json` and reload.")
@@ -60,32 +55,6 @@ def load_catalog(path: str) -> Dict:
         st.stop()
 
 
-def _find_control(catalog: Dict, control_id: str) -> Optional[Dict]:
-    for c in catalog.get("controls", []):
-        if c.get("id") == control_id:
-            return c
-    return None
-
-
-def _footprint_dims(catalog: Dict, footprint_key: str) -> Tuple[Optional[int], Optional[int]]:
-    fp = _find_control(catalog, "footprint")
-    if not fp:
-        return None, None
-    for opt in fp.get("options", []):
-        if opt.get("key") == footprint_key:
-            dims = opt.get("dims", {})
-            return dims.get("width_in"), dims.get("depth_in")
-    return None, None
-
-
-def _parts_value(catalog: Dict, part_key: str) -> float:
-    try:
-        return float(catalog.get("parts", {}).get(part_key, {}).get("base_value", 0) or 0)
-    except Exception:
-        return 0.0
-
-
-# ---------- UI tile helpers ----------
 @dataclass
 class OptionTile:
     key: str
@@ -134,203 +103,37 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
 
 
 def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
-    """Fixed-size preview without stretching (contain + pad)."""
     img = Image.open(path).convert("RGBA")
     contained = ImageOps.contain(img, (target_w, target_h))
     padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
     return padded.convert("RGB")
 
 
-# ---------- Query param helpers ----------
-def _get_query_param(name: str) -> Optional[str]:
+def _find_control(catalog: Dict, control_id: str) -> Optional[Dict]:
+    for c in catalog.get("controls", []):
+        if c.get("id") == control_id:
+            return c
+    return None
+
+
+def _footprint_dims(catalog: Dict, footprint_key: str) -> Tuple[Optional[int], Optional[int]]:
+    fp = _find_control(catalog, "footprint")
+    if not fp:
+        return None, None
+    for opt in fp.get("options", []):
+        if opt.get("key") == footprint_key:
+            dims = opt.get("dims", {})
+            return dims.get("width_in"), dims.get("depth_in")
+    return None, None
+
+
+def _parts_value(catalog: Dict, part_key: str) -> float:
     try:
-        qp = st.query_params
-        if name not in qp:
-            return None
-        v = qp.get(name)
-        if isinstance(v, list):
-            return v[0] if v else None
-        return str(v) if v is not None else None
+        return float(catalog.get("parts", {}).get(part_key, {}).get("base_value", 0) or 0)
     except Exception:
-        try:
-            qp = st.experimental_get_query_params()
-            v = qp.get(name)
-            return v[0] if isinstance(v, list) and v else None
-        except Exception:
-            return None
+        return 0.0
 
 
-def _current_query_params() -> Dict[str, str]:
-    try:
-        qp = st.query_params
-        out: Dict[str, str] = {}
-        for k in qp.keys():
-            v = qp.get(k)
-            if isinstance(v, list):
-                if v:
-                    out[str(k)] = str(v[0])
-            elif v is not None:
-                out[str(k)] = str(v)
-        return out
-    except Exception:
-        try:
-            qp = st.experimental_get_query_params()
-            out = {}
-            for k, v in qp.items():
-                if isinstance(v, list):
-                    if v:
-                        out[str(k)] = str(v[0])
-                elif v is not None:
-                    out[str(k)] = str(v)
-            return out
-        except Exception:
-            return {}
-
-
-def _parse_rc(value: str) -> Optional[Tuple[int, int]]:
-    try:
-        r_s, c_s = [p.strip() for p in value.split(",")]
-        r, c = int(r_s), int(c_s)
-        if r in (0, 1, 2) and c in (0, 1, 2):
-            return r, c
-        return None
-    except Exception:
-        return None
-
-
-def _href_with_param(param_key: str, param_val: str) -> str:
-    params = _current_query_params()
-    params[param_key] = param_val
-    return f"?{urlencode(params)}"
-
-
-# ---------- Working grid (HTML in main DOM, no iframe) ----------
-def render_weight_complexity_matrix(
-    key: str = "wc",
-    default: Tuple[int, int] = (2, 0),  # bottom-left
-    size_px: int = 420,
-) -> Tuple[int, int]:
-    """
-    Pixel-perfect 3x3 grid rendered in the main Streamlit DOM (not an iframe).
-    Each cell is a link to ?key=r,c so Streamlit reruns and totals update.
-
-    - Blank cells (no text)
-    - Selected cell highlights
-    - Default selection bottom-left (2,0)
-    - Left-aligned under the header
-    """
-    qp_val = _get_query_param(key)
-    qp_rc = _parse_rc(qp_val) if qp_val else None
-
-    if key not in st.session_state:
-        st.session_state[key] = qp_rc if qp_rc is not None else default
-    elif qp_rc is not None and tuple(st.session_state[key]) != qp_rc:
-        st.session_state[key] = qp_rc
-
-    r_sel, c_sel = st.session_state[key]
-
-    def cell(r: int, c: int) -> str:
-        selected = " selected" if (r == r_sel and c == c_sel) else ""
-        href = _href_with_param(key, f"{r},{c}")
-        return f"<a class='wc-cell{selected}' data-r='{r}' data-c='{c}' href='{href}'></a>"
-
-    st.markdown(
-        textwrap.dedent(
-            f"""
-            <style>
-              .wc-wrap {{
-                display:flex;
-                align-items:stretch;
-                gap:14px;
-                margin: 8px 0 6px;
-                width: 100%;
-              }}
-              .wc-y {{
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                font-weight:700;
-                color:#111827;
-                writing-mode: vertical-rl;
-                transform: rotate(180deg);
-                user-select:none;
-                padding: 0 6px;
-              }}
-              .wc-mid {{
-                display:flex;
-                flex-direction:column;
-                align-items:flex-start; /* left aligned */
-              }}
-              .wc-square {{
-                width: {size_px}px;
-                height: {size_px}px;
-                border: 2px solid #111827;
-                background:#fff;
-                display:grid;
-                grid-template-columns: repeat(3, 1fr);
-                grid-template-rows: repeat(3, 1fr);
-                box-sizing:border-box;
-                overflow:hidden;
-              }}
-              .wc-cell {{
-                display:block;
-                border-right: 2px solid #111827;
-                border-bottom: 2px solid #111827;
-                background:#ffffff;
-                cursor:pointer;
-                user-select:none;
-                text-decoration:none;
-              }}
-              .wc-cell[data-c="2"] {{ border-right: none; }}
-              .wc-cell[data-r="2"] {{ border-bottom: none; }}
-
-              .wc-cell:hover {{ background:#f3f4f6; }}
-
-              .wc-cell.selected {{
-                background:#e5e7eb;
-                outline: 2px solid #111827;
-                outline-offset: -2px;
-              }}
-
-              .wc-x {{
-                width: {size_px}px;
-                text-align:center;
-                margin-top: 10px;
-                font-weight:700;
-                color:#111827;
-                user-select:none;
-              }}
-
-              @media (max-width: 520px) {{
-                .wc-square {{
-                  width: 100%;
-                  height: auto;
-                  aspect-ratio: 1 / 1;
-                }}
-                .wc-x {{ width: 100%; }}
-              }}
-            </style>
-
-            <div class="wc-wrap">
-              <div class="wc-y">Weight</div>
-              <div class="wc-mid">
-                <div class="wc-square" role="grid" aria-label="Weight vs Complexity">
-                  {cell(0,0)}{cell(0,1)}{cell(0,2)}
-                  {cell(1,0)}{cell(1,1)}{cell(1,2)}
-                  {cell(2,0)}{cell(2,1)}{cell(2,2)}
-                </div>
-                <div class="wc-x">Complexity</div>
-              </div>
-            </div>
-            """
-        ),
-        unsafe_allow_html=True,
-    )
-
-    return st.session_state[key]
-
-
-# ---------- Pricing helpers ----------
 def _unit_factor(policy: Dict, qty: int) -> float:
     unit_factor = 1.0
     for band in policy.get("unit_tiers", []) or []:
@@ -353,26 +156,24 @@ def _unit_factor(policy: Dict, qty: int) -> float:
     return float(unit_factor)
 
 
-def _matrix_markup_pct(policy: Dict, rc: Tuple[int, int], fallback: float = 0.35) -> float:
-    """
-    Reads markup strictly from policy.matrix_markups[r][c].
-    Expects decimals (0.35 == 35%).
-    """
-    r, c = rc
+def _matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
     grid = policy.get("matrix_markups")
-    if not isinstance(grid, list) or len(grid) != 3:
-        return fallback
+    if not (isinstance(grid, list) and len(grid) == 3):
+        st.error("Missing/invalid `policy.matrix_markups` in pdq.json (expected 3x3 list).")
+        st.stop()
 
+    r, c = rc
     try:
-        row = grid[r]
-        if not isinstance(row, list) or len(row) != 3:
-            return fallback
-        val = float(row[c])
-        if val < 0:
-            return fallback
-        return val
+        val = float(grid[r][c])
     except Exception:
-        return fallback
+        st.error("Invalid value inside `policy.matrix_markups` (must be numeric decimals like 0.35).")
+        st.stop()
+
+    if val < 0:
+        st.error("Invalid markup (negative) in `policy.matrix_markups`.")
+        st.stop()
+
+    return val
 
 
 def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
@@ -426,6 +227,142 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
     return resolved
 
 
+# ---------- Grid control (Streamlit-native, styled as 3x3 square) ----------
+def render_weight_complexity_grid(
+    key: str = "wc_rc",
+    size_px: int = 420,
+    default_rc: Tuple[int, int] = (2, 0),  # bottom-left
+) -> Tuple[int, int]:
+    """
+    3x3 grid implemented as a single st.radio (no iframe, no new tab).
+    Styled to be a perfect square and highlight the selected cell.
+    """
+    cell_px = size_px // 3
+    default_index = default_rc[0] * 3 + default_rc[1]
+
+    if key not in st.session_state:
+        st.session_state[key] = default_index
+
+    st.markdown(
+        textwrap.dedent(
+            f"""
+            <style>
+              /* Scope styles to this radio only */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) [role="radiogroup"] {{
+                display: grid !important;
+                grid-template-columns: repeat(3, {cell_px}px) !important;
+                grid-auto-rows: {cell_px}px !important;
+                gap: 0 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: 2px solid #111827;
+                box-sizing: border-box;
+              }}
+
+              /* Each option label becomes a cell */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) label {{
+                margin: 0 !important;
+                padding: 0 !important;
+                border-right: 2px solid #111827;
+                border-bottom: 2px solid #111827;
+                background: #ffffff;
+                box-sizing: border-box;
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                user-select: none;
+              }}
+
+              /* Remove outer-most borders inside the square */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) label:nth-child(3n) {{
+                border-right: none;
+              }}
+              div[data-testid="stRadio"]:has(#wc-grid-marker) label:nth-last-child(-n+3) {{
+                border-bottom: none;
+              }}
+
+              /* Hide the radio circle */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) input[type="radio"] {{
+                opacity: 0;
+                position: absolute;
+                pointer-events: none;
+              }}
+
+              /* Hide text inside labels (keep blank cells) */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) label span {{
+                font-size: 0 !important;
+              }}
+
+              /* Hover */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) label:hover {{
+                background: #f3f4f6;
+              }}
+
+              /* Selected */
+              div[data-testid="stRadio"]:has(#wc-grid-marker) label:has(input[type="radio"]:checked) {{
+                background: #e5e7eb;
+                outline: 2px solid #111827;
+                outline-offset: -2px;
+              }}
+
+              /* Make sure the whole thing is left-aligned and tight */
+              .wc-axis-wrap {{
+                display:flex;
+                align-items:stretch;
+                gap:14px;
+                margin: 8px 0 6px;
+              }}
+              .wc-y {{
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-weight:700;
+                color:#111827;
+                writing-mode: vertical-rl;
+                transform: rotate(180deg);
+                user-select:none;
+                padding: 0 6px;
+              }}
+              .wc-x {{
+                width: {size_px}px;
+                text-align:center;
+                margin-top: 10px;
+                font-weight:700;
+                color:#111827;
+                user-select:none;
+              }}
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([0.10, 0.90], gap="small")
+    with left:
+        st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown("<div class='wc-axis-wrap'>", unsafe_allow_html=True)
+        st.markdown("<div>", unsafe_allow_html=True)
+
+        st.markdown("<span id='wc-grid-marker'></span>", unsafe_allow_html=True)
+
+        idx = st.radio(
+            "",
+            options=list(range(9)),
+            index=int(st.session_state[key]) if st.session_state[key] in range(9) else default_index,
+            key=key,
+            label_visibility="collapsed",
+        )
+        st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    r, c = divmod(int(idx), 3)
+    return r, c
+
+
 # ---------- Page header ----------
 st.markdown("## Select the type of display")
 
@@ -469,7 +406,6 @@ def render_pdq_form() -> None:
         label = ctrl.get("label")
         widget_key = f"pdq__{cid}"
 
-        # Controls removed from the current UI (kept in catalog for now)
         if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
             continue
 
@@ -511,11 +447,9 @@ def render_pdq_form() -> None:
 
         st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
-    # ---- Grid-driven markup (ONLY source of markup) ----
     st.markdown("#### Select Weight Tier and Complexity Level")
-    selected_rc = render_weight_complexity_matrix(key="wc", default=(2, 0), size_px=420)
+    selected_rc = render_weight_complexity_grid(key="wc_rc", size_px=420, default_rc=(2, 0))
 
-    # ---- Resolve parts and compute totals ----
     resolved = _resolve_parts_per_unit(catalog, form)
 
     qty = int(form.get("quantity", 1) or 1)
@@ -525,7 +459,7 @@ def render_pdq_form() -> None:
     per_unit_after_tier = per_unit_parts_subtotal * unit_factor
     program_base = per_unit_after_tier * qty
 
-    markup_pct = _matrix_markup_pct(policy, tuple(selected_rc), fallback=0.35)
+    markup_pct = _matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
 
     left, right = st.columns([0.58, 0.42], gap="large")
