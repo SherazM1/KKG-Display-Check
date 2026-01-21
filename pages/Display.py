@@ -180,110 +180,95 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
     return resolved
 
 
-# ---------- Grid (Streamlit widget + CSS grid) ----------
-def render_weight_complexity_grid(
+def render_wc_grid(
+    *,
     key: str = "wc_idx",
-    size_px: int = 420,
+    size_px: int = 360,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
-    bottom_row_labels: Tuple[str, str, str] = ("25%", "35%", "45%"),
 ) -> Tuple[int, int]:
     """
-    A real Streamlit control (st.radio) forced into a 3×3 square via scoped CSS.
-
-    - No new tabs
-    - Click reruns -> totals update
-    - Selected cell highlights
-    - Blank cells (labels hidden except bottom row)
-    - Default selection bottom-left
+    Streamlit-safe 3×3 clickable square grid:
+    - Uses ONE st.radio (so clicks always rerun + update totals)
+    - CSS forces the radio group into a perfect 3×3 grid
+    - Cells are blank, selected cell highlights
+    - Left-aligned
     """
-    cell_px = int(size_px / 3)
-    default_index = int(default_rc[0] * 3 + default_rc[1])
+    cell_px = size_px // 3
+    default_idx = default_rc[0] * 3 + default_rc[1]
 
-    # Labels: blank for top 6, bottom row labels for last 3
-    labels = [""] * 6 + list(bottom_row_labels)
-
+    # Marker + scoped CSS that reliably hits the next stRadio block within this container
     st.markdown(
         textwrap.dedent(
             f"""
             <style>
-              /* Scope using marker immediately before the stRadio block */
-              #wc-grid-marker + div[data-testid="stRadio"] [role="radiogroup"] {{
+              /* Scope everything to elements AFTER this marker (within same container block) */
+              #wc-grid-scope {{ display:none; }}
+
+              /* Make the radiogroup a 3×3 square */
+              #wc-grid-scope ~ div div[data-testid="stRadio"] [role="radiogroup"] {{
                 display: grid !important;
                 grid-template-columns: repeat(3, {cell_px}px) !important;
                 grid-auto-rows: {cell_px}px !important;
                 gap: 0 !important;
-                margin: 0 !important;
+                width: {size_px}px !important;
+                height: {size_px}px !important;
+                border: 2px solid #111827 !important;
                 padding: 0 !important;
-                width: {size_px}px;
-                height: {size_px}px;
-                border: 2px solid #111827;
-                box-sizing: border-box;
+                margin: 0 !important;
+                box-sizing: border-box !important;
               }}
 
-              #wc-grid-marker + div[data-testid="stRadio"] label {{
+              /* Each option becomes a cell */
+              #wc-grid-scope ~ div div[data-testid="stRadio"] label {{
                 margin: 0 !important;
                 padding: 0 !important;
-                border-right: 2px solid #111827;
-                border-bottom: 2px solid #111827;
-                background: #ffffff;
-                box-sizing: border-box;
+                width: {cell_px}px !important;
+                height: {cell_px}px !important;
+                border-right: 2px solid #111827 !important;
+                border-bottom: 2px solid #111827 !important;
+                background: #ffffff !important;
+                box-sizing: border-box !important;
                 display: block !important;
-                width: {cell_px}px;
-                height: {cell_px}px;
-                cursor: pointer;
-                user-select: none;
-                position: relative;
+                cursor: pointer !important;
+                user-select: none !important;
+                position: relative !important;
               }}
 
-              /* remove inner borders at edges */
-              #wc-grid-marker + div[data-testid="stRadio"] label:nth-child(3n) {{
-                border-right: none;
+              /* Remove inner borders at right edge and bottom edge */
+              #wc-grid-scope ~ div div[data-testid="stRadio"] label:nth-child(3n) {{
+                border-right: none !important;
               }}
-              #wc-grid-marker + div[data-testid="stRadio"] label:nth-last-child(-n+3) {{
-                border-bottom: none;
+              #wc-grid-scope ~ div div[data-testid="stRadio"] label:nth-last-child(-n+3) {{
+                border-bottom: none !important;
               }}
 
-              /* Hide the default radio circle */
-              #wc-grid-marker + div[data-testid="stRadio"] input[type="radio"] {{
-                opacity: 0;
-                position: absolute;
-                inset: 0;
+              /* Hide the default radio circle + any text */
+              #wc-grid-scope ~ div div[data-testid="stRadio"] input[type="radio"] {{
+                opacity: 0 !important;
+                position: absolute !important;
+                inset: 0 !important;
                 margin: 0 !important;
               }}
-
-              /* Hide option text for top rows, show for bottom row */
-              #wc-grid-marker + div[data-testid="stRadio"] label span {{
+              #wc-grid-scope ~ div div[data-testid="stRadio"] label span {{
                 display: none !important;
               }}
-              #wc-grid-marker + div[data-testid="stRadio"] label:nth-last-child(-n+3) span {{
-                display: block !important;
-                position: absolute;
-                bottom: 4px;
-                left: 50%;
-                transform: translateX(-50%);
-                font-size: 12px;
-                font-weight: 600;
-                color: #111827;
+
+              /* Hover + selected */
+              #wc-grid-scope ~ div div[data-testid="stRadio"] label:hover {{
+                background: #f3f4f6 !important;
+              }}
+              #wc-grid-scope ~ div div[data-testid="stRadio"] label:has(input[type="radio"]:checked) {{
+                background: #e5e7eb !important;
+                outline: 2px solid #111827 !important;
+                outline-offset: -2px !important;
               }}
 
-              /* Hover */
-              #wc-grid-marker + div[data-testid="stRadio"] label:hover {{
-                background: #f3f4f6;
-              }}
-
-              /* Selected */
-              #wc-grid-marker + div[data-testid="stRadio"] label:has(input[type="radio"]:checked) {{
-                background: #e5e7eb;
-                outline: 2px solid #111827;
-                outline-offset: -2px;
-              }}
-
+              /* Axis labels */
               .wc-axis-wrap {{
                 display:flex;
                 align-items:stretch;
-                gap:14px;
+                gap: 14px;
                 margin: 8px 0 6px;
-                width: 100%;
               }}
               .wc-y {{
                 display:flex;
@@ -317,15 +302,13 @@ def render_weight_complexity_grid(
     with right:
         st.markdown("<div class='wc-axis-wrap'><div>", unsafe_allow_html=True)
 
-        # Marker must be immediately before st.radio to scope CSS reliably
-        st.markdown("<span id='wc-grid-marker'></span>", unsafe_allow_html=True)
+        # MUST be immediately before st.radio for the scope selector to hit the right block
+        st.markdown("<span id='wc-grid-scope'></span>", unsafe_allow_html=True)
 
-        # Use labels for bottom row
         idx = st.radio(
             "",
             options=list(range(9)),
-            format_func=lambda i: labels[i],
-            index=st.session_state.get(key, default_index),
+            index=int(st.session_state.get(key, default_idx)),
             key=key,
             label_visibility="collapsed",
         )
@@ -333,9 +316,15 @@ def render_weight_complexity_grid(
         st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
         st.markdown("</div></div>", unsafe_allow_html=True)
 
-    idx_i = int(idx)
-    r, c = divmod(idx_i, 3)
+    r, c = divmod(int(idx), 3)
     return r, c
+
+
+def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
+    """policy['matrix_markups'] must be a 3×3 list of decimals (e.g. 0.35)."""
+    grid = policy["matrix_markups"]
+    r, c = rc
+    return float(grid[r][c])
 
 
 # ---------- UI tile helpers ----------
@@ -479,7 +468,7 @@ def render_pdq_form() -> None:
         st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
     st.markdown("#### Select Weight Tier and Complexity Level")
-    selected_rc = render_weight_complexity_grid(key="wc_idx", size_px=420, default_rc=(2, 0))
+    selected_rc = render_wc_grid(key="wc_idx", size_px=420, default_rc=(2, 0))
 
     resolved = _resolve_parts_per_unit(catalog, form)
 
