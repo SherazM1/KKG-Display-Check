@@ -17,15 +17,17 @@ from PIL import Image, ImageOps
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
 st.markdown(
-    """
-    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-      html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-      .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
-      .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
-      .muted { color:#6b7280; }
-    </style>
-    """,
+    textwrap.dedent(
+        """
+        <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+          html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
+          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
+          .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
+          .muted { color:#6b7280; }
+        </style>
+        """
+    ),
     unsafe_allow_html=True,
 )
 
@@ -53,60 +55,6 @@ def load_catalog(path: str) -> Dict:
     except Exception as e:
         st.error(f"Failed to parse `{path}`: {e}")
         st.stop()
-
-
-@dataclass
-class OptionTile:
-    key: str
-    label: str
-    path: str
-    category: str
-
-
-def _prettify(stem: str) -> str:
-    if stem in LABEL_OVERRIDES:
-        return LABEL_OVERRIDES[stem]
-    s = stem.replace("_", " ").replace("-", " ").strip()
-    return " ".join(w.capitalize() for w in s.split())
-
-
-def scan_pngs() -> List[OptionTile]:
-    opts: List[OptionTile] = []
-    if not os.path.isdir(ASSETS_ROOT):
-        return opts
-
-    for cat in sorted(os.listdir(ASSETS_ROOT)):
-        cat_path = os.path.join(ASSETS_ROOT, cat)
-        if not (os.path.isdir(cat_path) and cat in ALLOWED_DIRS):
-            continue
-
-        for fname in sorted(os.listdir(cat_path)):
-            if not fname.lower().endswith(".png"):
-                continue
-            if fname.lower().startswith(("kkg-logo", "logo")):
-                continue
-
-            stem, _ = os.path.splitext(fname)
-            path = os.path.join(cat_path, fname)
-            try:
-                Image.open(path).close()
-            except Exception:
-                continue
-
-            opts.append(OptionTile(key=f"{cat}/{stem}", label=_prettify(stem), path=path, category=cat))
-
-    return opts
-
-
-def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
-    return [lst[i : i + n] for i in range(0, len(lst), n)]
-
-
-def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
-    img = Image.open(path).convert("RGBA")
-    contained = ImageOps.contain(img, (target_w, target_h))
-    padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
-    return padded.convert("RGB")
 
 
 def _find_control(catalog: Dict, control_id: str) -> Optional[Dict]:
@@ -157,20 +105,25 @@ def _unit_factor(policy: Dict, qty: int) -> float:
 
 
 def _matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
+    """
+    Reads markup strictly from policy.matrix_markups[r][c].
+    Expects decimals (0.35 == 35%).
+    Hard-fails if missing/invalid so you don't silently apply wrong totals.
+    """
     grid = policy.get("matrix_markups")
-    if not (isinstance(grid, list) and len(grid) == 3):
-        st.error("Missing/invalid `policy.matrix_markups` in pdq.json (expected 3x3 list).")
+    if not (isinstance(grid, list) and len(grid) == 3 and all(isinstance(r, list) and len(r) == 3 for r in grid)):
+        st.error("Missing/invalid `policy.matrix_markups` in pdq.json (expected 3x3 list of decimals).")
         st.stop()
 
     r, c = rc
     try:
         val = float(grid[r][c])
     except Exception:
-        st.error("Invalid value inside `policy.matrix_markups` (must be numeric decimals like 0.35).")
+        st.error("Invalid value in `policy.matrix_markups` (must be numeric decimals like 0.35).")
         st.stop()
 
     if val < 0:
-        st.error("Invalid markup (negative) in `policy.matrix_markups`.")
+        st.error("Invalid markup in `policy.matrix_markups` (negative).")
         st.stop()
 
     return val
@@ -227,91 +180,96 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
     return resolved
 
 
-# ---------- Grid control (Streamlit-native, styled as 3x3 square) ----------
+# ---------- Grid (Streamlit widget + CSS grid) ----------
 def render_weight_complexity_grid(
-    key: str = "wc_rc",
+    key: str = "wc_idx",
     size_px: int = 420,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    3x3 grid implemented as a single st.radio (no iframe, no new tab).
-    Styled to be a perfect square and highlight the selected cell.
-    """
-    cell_px = size_px // 3
-    default_index = default_rc[0] * 3 + default_rc[1]
+    A real Streamlit control (st.radio) forced into a 3×3 square via scoped CSS.
 
-    if key not in st.session_state:
-        st.session_state[key] = default_index
+    - No new tabs
+    - Click reruns -> totals update
+    - Selected cell highlights
+    - Blank cells (labels hidden)
+    - Default selection bottom-left
+    """
+    cell_px = int(size_px / 3)
+    default_index = int(default_rc[0] * 3 + default_rc[1])
 
     st.markdown(
         textwrap.dedent(
             f"""
             <style>
-              /* Scope styles to this radio only */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) [role="radiogroup"] {{
+              /* Scope using marker immediately before the stRadio block */
+              #wc-grid-marker + div[data-testid="stRadio"] [role="radiogroup"] {{
                 display: grid !important;
                 grid-template-columns: repeat(3, {cell_px}px) !important;
                 grid-auto-rows: {cell_px}px !important;
                 gap: 0 !important;
-                padding: 0 !important;
                 margin: 0 !important;
+                padding: 0 !important;
+                width: {size_px}px;
+                height: {size_px}px;
                 border: 2px solid #111827;
                 box-sizing: border-box;
               }}
 
-              /* Each option label becomes a cell */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) label {{
+              #wc-grid-marker + div[data-testid="stRadio"] label {{
                 margin: 0 !important;
                 padding: 0 !important;
                 border-right: 2px solid #111827;
                 border-bottom: 2px solid #111827;
                 background: #ffffff;
                 box-sizing: border-box;
-                display: flex !important;
-                align-items: center;
-                justify-content: center;
+                display: block !important;
+                width: {cell_px}px;
+                height: {cell_px}px;
                 cursor: pointer;
                 user-select: none;
+                position: relative;
               }}
 
-              /* Remove outer-most borders inside the square */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) label:nth-child(3n) {{
+              /* remove inner borders at edges */
+              #wc-grid-marker + div[data-testid="stRadio"] label:nth-child(3n) {{
                 border-right: none;
               }}
-              div[data-testid="stRadio"]:has(#wc-grid-marker) label:nth-last-child(-n+3) {{
+              #wc-grid-marker + div[data-testid="stRadio"] label:nth-last-child(-n+3) {{
                 border-bottom: none;
               }}
 
-              /* Hide the radio circle */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) input[type="radio"] {{
+              /* Hide the default radio circle */
+              #wc-grid-marker + div[data-testid="stRadio"] input[type="radio"] {{
                 opacity: 0;
                 position: absolute;
-                pointer-events: none;
+                inset: 0;
+                margin: 0 !important;
               }}
 
-              /* Hide text inside labels (keep blank cells) */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) label span {{
-                font-size: 0 !important;
+              /* Hide option text (keep blank cells) */
+              #wc-grid-marker + div[data-testid="stRadio"] label span {{
+                display: none !important;
               }}
 
               /* Hover */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) label:hover {{
+              #wc-grid-marker + div[data-testid="stRadio"] label:hover {{
                 background: #f3f4f6;
               }}
 
               /* Selected */
-              div[data-testid="stRadio"]:has(#wc-grid-marker) label:has(input[type="radio"]:checked) {{
+              #wc-grid-marker + div[data-testid="stRadio"] label:has(input[type="radio"]:checked) {{
                 background: #e5e7eb;
                 outline: 2px solid #111827;
                 outline-offset: -2px;
               }}
 
-              /* Make sure the whole thing is left-aligned and tight */
               .wc-axis-wrap {{
                 display:flex;
                 align-items:stretch;
                 gap:14px;
                 margin: 8px 0 6px;
+                width: 100%;
               }}
               .wc-y {{
                 display:flex;
@@ -343,24 +301,81 @@ def render_weight_complexity_grid(
         st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
 
     with right:
-        st.markdown("<div class='wc-axis-wrap'>", unsafe_allow_html=True)
-        st.markdown("<div>", unsafe_allow_html=True)
+        st.markdown("<div class='wc-axis-wrap'><div>", unsafe_allow_html=True)
 
+        # Marker must be immediately before st.radio to scope CSS reliably
         st.markdown("<span id='wc-grid-marker'></span>", unsafe_allow_html=True)
 
+        # Keep labels unique; we hide them anyway
         idx = st.radio(
             "",
             options=list(range(9)),
-            index=int(st.session_state[key]) if st.session_state[key] in range(9) else default_index,
+            index=st.session_state.get(key, default_index),
             key=key,
             label_visibility="collapsed",
         )
-        st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    r, c = divmod(int(idx), 3)
+        st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
+        st.markdown("</div></div>", unsafe_allow_html=True)
+
+    idx_i = int(idx)
+    r, c = divmod(idx_i, 3)
     return r, c
+
+
+# ---------- UI tile helpers ----------
+@dataclass
+class OptionTile:
+    key: str
+    label: str
+    path: str
+    category: str
+
+
+def _prettify(stem: str) -> str:
+    if stem in LABEL_OVERRIDES:
+        return LABEL_OVERRIDES[stem]
+    s = stem.replace("_", " ").replace("-", " ").strip()
+    return " ".join(w.capitalize() for w in s.split())
+
+
+def scan_pngs() -> List[OptionTile]:
+    opts: List[OptionTile] = []
+    if not os.path.isdir(ASSETS_ROOT):
+        return opts
+
+    for cat in sorted(os.listdir(ASSETS_ROOT)):
+        cat_path = os.path.join(ASSETS_ROOT, cat)
+        if not (os.path.isdir(cat_path) and cat in ALLOWED_DIRS):
+            continue
+
+        for fname in sorted(os.listdir(cat_path)):
+            if not fname.lower().endswith(".png"):
+                continue
+            if fname.lower().startswith(("kkg-logo", "logo")):
+                continue
+
+            stem, _ = os.path.splitext(fname)
+            path = os.path.join(cat_path, fname)
+            try:
+                Image.open(path).close()
+            except Exception:
+                continue
+
+            opts.append(OptionTile(key=f"{cat}/{stem}", label=_prettify(stem), path=path, category=cat))
+
+    return opts
+
+
+def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
+    return [lst[i : i + n] for i in range(0, len(lst), n)]
+
+
+def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
+    img = Image.open(path).convert("RGBA")
+    contained = ImageOps.contain(img, (target_w, target_h))
+    padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
+    return padded.convert("RGB")
 
 
 # ---------- Page header ----------
@@ -406,6 +421,7 @@ def render_pdq_form() -> None:
         label = ctrl.get("label")
         widget_key = f"pdq__{cid}"
 
+        # Controls removed from the current UI (kept in catalog for now)
         if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
             continue
 
@@ -448,7 +464,7 @@ def render_pdq_form() -> None:
         st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
     st.markdown("#### Select Weight Tier and Complexity Level")
-    selected_rc = render_weight_complexity_grid(key="wc_rc", size_px=420, default_rc=(2, 0))
+    selected_rc = render_weight_complexity_grid(key="wc_idx", size_px=420, default_rc=(2, 0))
 
     resolved = _resolve_parts_per_unit(catalog, form)
 
@@ -463,7 +479,6 @@ def render_pdq_form() -> None:
     final_total = program_base * (1.0 + markup_pct)
 
     left, right = st.columns([0.58, 0.42], gap="large")
-
     with left:
         st.markdown("#### Resolved parts (per unit)")
         if not resolved:
@@ -484,10 +499,7 @@ def render_pdq_form() -> None:
         st.write(f"Program base (before markup): **${program_base:,.2f}**")
         st.write(f"Final price (after markup): **${final_total:,.2f}**")
 
-    st.markdown(
-        "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
 
 # ---------- Router ----------
