@@ -188,30 +188,25 @@ def render_wc_grid(
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    Locked 3×3 grid that always renders correctly:
-    - Pure HTML/CSS grid (square tiles)
-    - Each tile has a small Select button
-    - Click submits ?{key}=idx (GET) -> Streamlit rerun
-    - Selection stored in st.session_state[key] (single active)
-    - Returns (row, col)
-
-    This avoids Streamlit column sizing/DOM/CSS fragility entirely.
+    Locked 3×3 grid rendered as HTML/CSS with JS navigation.
+    - Each tile has a small Select/Selected pill
+    - Click updates query param ?{key}=idx and reloads (Streamlit reruns)
+    - Selection stored in st.session_state[key]
     """
     cell_px = max(64, min(110, int(size_px) // 3))
     grid_px = cell_px * 3
-
     default_idx = int(default_rc[0] * 3 + default_rc[1])
 
-    # 1) Pull selection from query params (if present), otherwise session_state/default
-    qp = st.query_params  # dict-like
+    # Read query param into session state (supports both old/new Streamlit query APIs)
     idx_from_qp = None
-    if key in qp:
-        try:
-            raw = qp.get(key)
+    try:
+        qp = st.query_params
+        raw = qp.get(key)
+        if raw is not None:
             raw_val = raw[0] if isinstance(raw, list) else raw
             idx_from_qp = int(raw_val)
-        except Exception:
-            idx_from_qp = None
+    except Exception:
+        idx_from_qp = None
 
     if idx_from_qp is not None and 0 <= idx_from_qp <= 8:
         st.session_state[key] = idx_from_qp
@@ -220,52 +215,96 @@ def render_wc_grid(
     selected_idx = min(8, max(0, selected_idx))
     st.session_state[key] = selected_idx
 
-    # 2) Preserve other query params on submit (so we don't wipe unrelated params)
-    hidden_inputs = []
-    for k, v in qp.items():
+    # Preserve other query params when we navigate
+    preserved = []
+    try:
+        qp = st.query_params
+        items = qp.items()
+    except Exception:
+        items = []
+    for k, v in items:
         if k == key:
             continue
         vs = v if isinstance(v, list) else [v]
         for item in vs:
-            hidden_inputs.append(
-                f'<input type="hidden" name="{html.escape(str(k))}" value="{html.escape(str(item))}"/>'
-            )
-    hidden_inputs_html = "\n".join(hidden_inputs)
+            preserved.append((str(k), str(item)))
 
-    # 3) Build the 3×3 buttons
-    btns = []
+    preserved_js = "[" + ",".join(
+        f'[{html.escape(repr(k))},{html.escape(repr(v))}]' for k, v in preserved
+    ) + "]"
+
+    aria_prefix = f"__wcgrid__{key}__"
+
+    buttons_html = []
     for idx in range(9):
         is_selected = idx == selected_idx
-        label = "Selected" if is_selected else "Select"
         cls = "cell selected" if is_selected else "cell"
-        btns.append(
+        pill = "Selected" if is_selected else "Select"
+        buttons_html.append(
             f"""
-            <button class="{cls}" type="submit" name="{html.escape(key)}" value="{idx}">
-              <span class="btn">{label}</span>
+            <button
+              type="button"
+              class="{cls}"
+              data-idx="{idx}"
+              aria-label="{html.escape(f"{aria_prefix}{idx}")}"
+            >
+              <span class="pill">{pill}</span>
             </button>
             """
         )
-    btns_html = "\n".join(btns)
 
-    # 4) Render
     html_block = f"""
-    <div class="wc-wrap" style="width:{grid_px}px">
-      <form method="get" action="">
-        {hidden_inputs_html}
-        <div class="grid">
-          {btns_html}
-        </div>
-      </form>
+    <div class="wc-wrap">
+      <div class="grid">
+        {''.join(buttons_html)}
+      </div>
     </div>
 
+    <script>
+      (function() {{
+        const KEY = {html.escape(repr(key))};
+        const preserved = {preserved_js};
+
+        function navigateWith(idx) {{
+          // Try parent/top first (iframe sandbox), fall back to self.
+          const targets = [window.top, window.parent, window];
+          for (const t of targets) {{
+            try {{
+              const url = new URL(t.location.href);
+              // Keep existing params, ensure ours is set
+              for (const [k,v] of preserved) {{
+                if (!url.searchParams.has(k)) url.searchParams.set(k, v);
+              }}
+              url.searchParams.set(KEY, String(idx));
+              t.location.href = url.toString();
+              return;
+            }} catch (e) {{
+              // continue
+            }}
+          }}
+        }}
+
+        document.querySelectorAll('.cell').forEach(btn => {{
+          btn.addEventListener('click', () => {{
+            const idx = btn.getAttribute('data-idx');
+            navigateWith(idx);
+          }});
+        }});
+      }})();
+    </script>
+
     <style>
-      .wc-wrap {{ margin: 0; padding: 0; }}
+      .wc-wrap {{
+        width: {grid_px + 24}px;
+        padding: 4px;
+        overflow: visible;
+      }}
 
       .grid {{
         display: grid;
         grid-template-columns: repeat(3, {cell_px}px);
         grid-template-rows: repeat(3, {cell_px}px);
-        gap: 10px;
+        gap: 12px;
       }}
 
       .cell {{
@@ -294,7 +333,7 @@ def render_wc_grid(
         box-shadow: inset 0 0 0 1px #111827;
       }}
 
-      .btn {{
+      .pill {{
         display: inline-block;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
         font-size: 12px;
@@ -305,16 +344,22 @@ def render_wc_grid(
         background: #ffffff;
         color: #111827;
         line-height: 1;
+        user-select: none;
       }}
 
-      .cell.selected .btn {{
+      .cell.selected .pill {{
         border-color: #111827;
         background: #e5e7eb;
       }}
     </style>
     """
 
-    components.html(html_block, height=grid_px + 24, width=grid_px + 24)
+    # Give the iframe extra width so nothing clips on the right
+    components.html(
+        html_block,
+        height=grid_px + 60,
+        width=grid_px + 80,
+    )
 
     r, c = divmod(selected_idx, 3)
     return int(r), int(c)
