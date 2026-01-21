@@ -183,6 +183,10 @@ def render_pdq_form():
         label = ctrl.get("label")
         key = f"pdq__{cid}"
 
+        # Skip removed controls
+        if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
+            continue
+
         if cid == "product_touches":
             assembly_key = st.session_state.form.get("assembly")
             if assembly_key != "assembly-turnkey":
@@ -225,6 +229,38 @@ def render_pdq_form():
                 st.session_state.form[cid] = float(val)
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
+
+    # 3x3 Grid for Weight Tier and Complexity Selection
+    st.markdown("#### Select Weight Tier and Complexity Level")
+    weight_tiers = ["0-5 lb", "5-10 lb", "10+ lb"]
+    complexity_levels = ["Low", "Medium", "High"]
+    
+    # Placeholder factors (eventually read from catalog["policy"]["grid_factors"])
+    grid_factors = {
+        "0-5 lb_Low": 1.0,
+        "0-5 lb_Medium": 1.05,
+        "0-5 lb_High": 1.1,
+        "5-10 lb_Low": 1.05,
+        "5-10 lb_Medium": 1.1,
+        "5-10 lb_High": 1.15,
+        "10+ lb_Low": 1.1,
+        "10+ lb_Medium": 1.15,
+        "10+ lb_High": 1.2,
+    }
+    
+    # Render grid
+    for wt in weight_tiers:
+        cols = st.columns(4)
+        with cols[0]:
+            st.markdown(f"**{wt}**")
+        for i, cx in enumerate(complexity_levels):
+            with cols[i + 1]:
+                if st.button(cx, key=f"grid_{wt}_{cx}"):
+                    st.session_state.selected_grid = f"{wt}_{cx}"
+    
+    selected_grid = st.session_state.get("selected_grid")
+    if selected_grid:
+        st.success(f"Selected: {selected_grid.replace('_', ' ')}")
 
     form = st.session_state.form
     rules = catalog.get("rules", {})
@@ -297,26 +333,11 @@ def render_pdq_form():
                 if qty >= min_q and qty < int(max_q):
                     unit_factor = float(band.get("factor", 1.0))
 
-    unit_weight_unit = form.get("unit_weight_unit", "lb")
-    unit_weight_val = float(form.get("unit_weight_value", 0) or 0)
-    unit_lb = unit_weight_val / 16.0 if unit_weight_unit == "oz" else unit_weight_val
-    total_lbs = unit_lb * qty
+    # Removed weight calculations (total_lbs, weight_add, complexity_add)
 
-    weight_add = 0.0
-    for bucket in policy.get("weight_tiers", []):
-        min_l = float(bucket.get("min_lbs", 0))
-        max_l = bucket.get("max_lbs")
-        if max_l is None:
-            if total_lbs >= min_l:
-                weight_add = float(bucket.get("add", 0))
-        else:
-            if total_lbs >= min_l and total_lbs <= float(max_l):
-                weight_add = float(bucket.get("add", 0))
-
-    cx_key = form.get("complexity_level", "cx-low")
-    complexity_add = float(policy.get("complexity_add", {}).get(cx_key, 0.0))
     base_markup = float(policy.get("base_markup", 0.35))
-    markup_pct = base_markup + weight_add + complexity_add
+    grid_factor = grid_factors.get(selected_grid, 1.0) if selected_grid else 1.0
+    markup_pct = base_markup * grid_factor
 
     per_unit_parts_subtotal = 0.0
     for part_key, q in resolved:
@@ -342,29 +363,12 @@ def render_pdq_form():
             df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])
             st.table(df)
 
-    # st.markdown("#### Unit tier match")
-# st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")
-
-# st.markdown("#### Weight & Markup")
-# weight_str = _round_display_weight(total_lbs, policy)
-# st.write(
-#     f"Total weight: **{weight_str} lb**  "
-#     f"<span class='pill'>unit={unit_weight_val:g} {unit_weight_unit}</span>"
-#     f"<span class='pill'>qty={qty}</span>",
-#     unsafe_allow_html=True,
-# )
-# st.write(
-#     f"Markup breakdown: Base **{base_markup*100:.0f}%** + Weight **{weight_add*100:.0f}%** + Complexity **{complexity_add*100:.0f}%** "
-#     f"= **{markup_pct*100:.0f}%**"
-# )
-
-
     with right:
         st.markdown("#### Totals")
         st.write(f"Per-unit price (before quantity discount): **${per_unit_parts_subtotal:,.2f}**")
         st.write(f"Per-unit price (after quantity discount): **${per_unit_after_tier:,.2f}**")
-        st.write(f"Program base (before complexity and weight markup): **${program_base:,.2f}**")
-        st.write(f"Final price (After everything): **${final_total:,.2f}**")
+        st.write(f"Program base (before markup): **${program_base:,.2f}**")
+        st.write(f"Final price (after markup): **${final_total:,.2f}**")
 
     st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
