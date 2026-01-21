@@ -183,97 +183,81 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 def render_wc_grid(
     *,
     key: str = "wc_idx",
-    size_px: int = 360,
+    size_px: int = 300,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    3×3 tile grid using Streamlit containers (doc-style), each with a small Select button.
-    Single active selection stored in st.session_state[key] as idx 0..8.
-
-    Returns:
-        (row, col)
+    3×3 tile grid using Streamlit containers (stable), single-select.
+    - No header inside (caller controls headings)
+    - Weight label left, Complexity label bottom
+    - Compact, square tiles, no giant whitespace
     """
-    cell_px = max(64, int(size_px) // 4)  # smaller than before
-    default_idx = int(default_rc[0] * 3 + default_rc[1])
+    cell_px = max(72, int(size_px) // 3)  # smaller + still fits a button
+    grid_h_px = cell_px * 3
 
+    default_idx = int(default_rc[0] * 3 + default_rc[1])
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
 
     st.markdown(
-        """
+        f"""
         <style>
-          .wc-badge {
-            display:inline-block;
-            padding: 3px 8px;
-            border-radius: 999px;
+          .wc-y {{
+            height: {grid_h_px}px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-weight: 700;
-            font-size: 11px;
-            border: 1px solid #11182722;
-            background: #11182708;
-          }
-          .wc-badge.on {
-            border: 1px solid #111827;
-            background: #e5e7eb;
-          }
-          .wc-y {
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-weight:700;
-            color:#111827;
+            color: #111827;
             writing-mode: vertical-rl;
             transform: rotate(180deg);
-            user-select:none;
-            padding: 0 6px;
-            height: 100%;
-          }
-          .wc-x {
-            text-align:center;
+            user-select: none;
+          }}
+          .wc-x {{
+            width: {cell_px * 3}px;
+            text-align: center;
             margin-top: 8px;
-            font-weight:700;
-            color:#111827;
-            user-select:none;
-          }
-          .wc-tile-pad div[data-testid="stVerticalBlockBorderWrapper"] {
-            padding: 8px !important;
-          }
+            font-weight: 700;
+            color: #111827;
+            user-select: none;
+          }}
+          /* Make the tile border look clean and consistent */
+          div[data-testid="stVerticalBlockBorderWrapper"] {{
+            border-radius: 10px !important;
+          }}
+          /* Keep buttons compact inside tiles */
+          div[data-testid="stButton"] button {{
+            padding: 0.25rem 0.5rem !important;
+            font-weight: 700 !important;
+          }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Left label, grid, right spacer to keep grid from stretching (helps tiles look squarer)
-    label_col, grid_col, _spacer = st.columns([0.08, 0.32, 0.60], gap="small")
-    with label_col:
+    left, right = st.columns([0.08, 0.92], gap="small")
+    with left:
         st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
 
-    with grid_col:
+    with right:
         for rr in range(3):
             cols = st.columns(3, gap="small")
             for cc in range(3):
                 idx = rr * 3 + cc
                 with cols[cc]:
                     tile = st.container(border=True, height=cell_px)
-
                     with tile:
-                        st.markdown("<div class='wc-tile-pad'>", unsafe_allow_html=True)
-
-                        is_selected = (idx == selected_idx)
-                        badge_cls = "wc-badge on" if is_selected else "wc-badge"
-                        badge_txt = "Selected" if is_selected else "Not selected"
-                        st.markdown(f"<span class='{badge_cls}'>{badge_txt}</span>", unsafe_allow_html=True)
-
-                        st.write("")
-                        if st.button("Select", key=f"{key}__tile__{idx}", use_container_width=True):
+                        is_selected = idx == selected_idx
+                        btn_label = "Selected" if is_selected else "Select"
+                        if st.button(btn_label, key=f"{key}__tile__{idx}", use_container_width=True):
                             st.session_state[key] = idx
                             selected_idx = idx
-
-                        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
     return int(r), int(c)
+
 
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
