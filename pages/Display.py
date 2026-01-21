@@ -25,76 +25,72 @@ st.markdown(
       .pill { display:inline-block; padding:2px 8px; border:1px solid #e5e7eb; border-radius:999px; font-size:12px; margin-left:6px; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
 
-      /* ---- 3x3 matrix styles (single square divided into 9 cells) ---- */
-      .wc-wrap { display:flex; align-items:stretch; gap:12px; margin:8px 0 10px; }
-      .wc-ylabel {
+      /* ---- Sketch-style 3x3 matrix (one square, 9 cells) ---- */
+      .sk-wrap { display:flex; align-items:stretch; gap:14px; margin:8px 0 6px; }
+      .sk-ylabel {
         display:flex; align-items:center; justify-content:center;
-        padding:0 10px; font-weight:700; color:#374151;
+        font-weight:700; color:#111827;
         writing-mode: vertical-rl; transform: rotate(180deg);
         user-select:none;
+        padding: 0 6px;
       }
-      .wc-col {
-        display:flex; flex-direction:column; align-items:flex-start;
-        width: 380px; max-width: 100%;
-      }
-      .wc-matrix {
-        width: 380px; max-width: 100%;
+      .sk-matrix-col { display:flex; flex-direction:column; align-items:flex-start; }
+      .sk-square {
+        width: 420px; max-width: 100%;
         aspect-ratio: 1 / 1;
         border: 2px solid #111827;
-        border-radius: 12px;
-        overflow:hidden;
+        border-radius: 0px; /* sketch vibe = sharp corners */
         background:#fff;
+        overflow:hidden;
+      }
+      .sk-grid {
         display:grid;
         grid-template-columns: repeat(3, 1fr);
         grid-template-rows: repeat(3, 1fr);
-        gap: 0px;
-      }
-      .wc-cell {
-        border-right: 1px solid #e5e7eb;
-        border-bottom: 1px solid #e5e7eb;
-        background:#f8fafc;
-        height: 100%;
         width: 100%;
+        height: 100%;
       }
-      /* remove right/bottom borders on edges */
-      .wc-cell.edge-right { border-right: none; }
-      .wc-cell.edge-bottom { border-bottom: none; }
-
-      /* selection highlight */
-      .wc-cell.selected { background:#e5e7eb; outline:2px solid #111827; outline-offset:-2px; }
-
-      .wc-xaxis {
-        width: 380px; max-width: 100%;
-        display:flex; justify-content:space-between;
-        margin-top:8px;
-        color:#6b7280; font-size:12px; font-weight:600;
+      .sk-cell {
+        border-right: 2px solid #111827;
+        border-bottom: 2px solid #111827;
+        background:#ffffff;
+        display:flex;
+        align-items:flex-end;      /* percentages sit near bottom like your sketch */
+        justify-content:flex-start;
+        padding: 10px 12px;
+        box-sizing:border-box;
+        font-weight:700;
+        color:#1f2937;
       }
-      .wc-xlabel {
-        width: 380px; max-width: 100%;
+      .sk-cell.edge-right { border-right: none; }
+      .sk-cell.edge-bottom { border-bottom: none; }
+
+      .sk-cell.selected {
+        background:#e5e7eb;
+        outline: 2px solid #111827;
+        outline-offset: -2px;
+      }
+
+      .sk-xlabel {
+        width: 420px; max-width: 100%;
         text-align:center;
-        margin-top:6px;
-        font-weight:700; color:#374151;
+        margin-top:10px;
+        font-weight:700;
+        color:#111827;
         user-select:none;
       }
-      .wc-rowlabels {
-        display:flex; flex-direction:column; justify-content:space-between;
-        height: 380px; /* matches matrix width via aspect ratio */
-        margin-right: 6px;
-        color:#6b7280; font-size:12px; font-weight:600;
-      }
 
-      /* make Streamlit buttons look like invisible click areas inside each cell */
-      div[data-testid="stButton"] > button.wc-btn {
-        width:100% !important;
-        height:100% !important;
-        padding:0 !important;
-        margin:0 !important;
-        border:none !important;
-        background:transparent !important;
-        border-radius:0 !important;
+      /* Streamlit button normalization inside our grid columns */
+      .sk-btn-holder div[data-testid="stButton"] > button {
+        width: 100% !important;
+        height: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        border-radius: 0 !important;
       }
-      div[data-testid="stButton"] { height:100%; }
-
+      .sk-btn-holder div[data-testid="stButton"] { height: 100%; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -208,75 +204,69 @@ def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image
     padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
     return padded.convert("RGB")
 
-def render_weight_complexity_matrix(
-    weight_tiers: List[str],
-    complexity_levels: List[str],
+def render_weight_complexity_sketch_matrix(
     key: str = "selected_grid",
-) -> Optional[str]:
+    bottom_row_labels: Tuple[str, str, str] = ("25%", "35%", "45%"),
+) -> Optional[Tuple[int, int]]:
     """
-    Single square divided into 9 boxes.
-    Left side label: Weight
-    Bottom label: Complexity
-    Stores selection in st.session_state[key] as f"{weight}_{complexity}".
+    Renders a single square divided into 9 cells (3x3), sketch-style.
+
+    - Left side says: Weight
+    - Bottom says: Complexity
+    - Bottom row shows the 3 labels inside the cells (25/35/45 like your sketch)
+    - Stores selection as (row_index, col_index) in st.session_state[key]
     """
     if key not in st.session_state:
-        st.session_state[key] = None
+        st.session_state[key] = (0, 0)
 
-    # Use 3 columns layout: row labels | y-axis title | matrix+bottom labels
-    left_col, mid_col, right_col = st.columns([0.20, 0.06, 0.74], gap="small")
+    r_sel, c_sel = st.session_state[key]
+
+    # Layout: [Weight label] [Square + Complexity label]
+    left_col, right_col = st.columns([0.10, 0.90], gap="small")
 
     with left_col:
-        # row labels aligned with matrix
-        st.markdown("<div class='wc-rowlabels'>", unsafe_allow_html=True)
-        for lbl in weight_tiers:
-            st.markdown(f"<div>{lbl}</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with mid_col:
-        st.markdown("<div class='wc-ylabel'>Weight</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sk-ylabel'>Weight</div>", unsafe_allow_html=True)
 
     with right_col:
-        # Create the 3x3 clickable area: we overlay Streamlit buttons inside a bordered square
-        # We render a 3x3 grid using Streamlit columns/rows and add an HTML "cell" behind each button for styling.
-        st.markdown("<div class='wc-col'>", unsafe_allow_html=True)
+        # The square (HTML), but the clicks come from Streamlit buttons laid on top cell-by-cell.
+        st.markdown("<div class='sk-matrix-col'>", unsafe_allow_html=True)
 
-        # Matrix box (HTML wrapper)
-        st.markdown("<div class='wc-matrix'>", unsafe_allow_html=True)
+        # Build a 3x3 grid using Streamlit columns for click targets,
+        # while drawing the actual square using HTML below each cell.
+        st.markdown("<div class='sk-square'><div class='sk-grid'>", unsafe_allow_html=True)
 
-        for wi, wt in enumerate(weight_tiers):
+        for r in range(3):
             cols = st.columns(3, gap="small")
-            for ci, cx in enumerate(complexity_levels):
-                selected = st.session_state[key] == f"{wt}_{cx}"
-                is_edge_right = (ci == 2)
-                is_edge_bottom = (wi == 2)
+            for c in range(3):
+                is_edge_right = (c == 2)
+                is_edge_bottom = (r == 2)
 
-                cell_classes = ["wc-cell"]
-                if selected:
-                    cell_classes.append("selected")
+                classes = ["sk-cell"]
                 if is_edge_right:
-                    cell_classes.append("edge-right")
+                    classes.append("edge-right")
                 if is_edge_bottom:
-                    cell_classes.append("edge-bottom")
-                cls = " ".join(cell_classes)
+                    classes.append("edge-bottom")
+                if (r == r_sel and c == c_sel):
+                    classes.append("selected")
+                cls = " ".join(classes)
 
-                with cols[ci]:
-                    # The button is the click target (invisible), the div is the visual cell.
-                    if st.button(" ", key=f"grid_{wt}_{cx}", use_container_width=True):
-                        st.session_state[key] = f"{wt}_{cx}"
+                # Only bottom row gets the % labels, like your sketch
+                cell_text = ""
+                if r == 2:
+                    cell_text = bottom_row_labels[c]
 
-                    st.markdown(f"<div class='{cls}'></div>", unsafe_allow_html=True)
+                with cols[c]:
+                    st.markdown("<div class='sk-btn-holder'>", unsafe_allow_html=True)
+                    if st.button(" ", key=f"sk_cell_{r}_{c}", use_container_width=True):
+                        st.session_state[key] = (r, c)
+                    st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("</div>", unsafe_allow_html=True)  # end wc-matrix
+                    # Draw the visible cell under the click target
+                    st.markdown(f"<div class='{cls}'>{cell_text}</div>", unsafe_allow_html=True)
 
-        # Bottom labels (only what you asked: Complexity label + Low/Medium/High under the square)
-        st.markdown(
-            "<div class='wc-xaxis'>"
-            + "".join([f"<div>{c}</div>" for c in complexity_levels])
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown("<div class='wc-xlabel'>Complexity</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)  # end wc-col
+        st.markdown("</div></div>", unsafe_allow_html=True)  # end square/grid
+        st.markdown("<div class='sk-xlabel'>Complexity</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     return st.session_state[key]
 
@@ -292,9 +282,10 @@ if not tiles:
         "(e.g., `assets/references/pdq/digital_pdq_tray.png`)."
     )
 else:
+    # force 2-per-row so PDQ + DUMP BIN sit together cleanly
     per_row = 2
     for row in _chunk(tiles, per_row):
-        cols = st.columns(len(row), gap="large")
+        cols = st.columns(len(row), gap="large")  # IMPORTANT: no empty columns -> no blank boxes
         for c, t in zip(cols, row):
             with c:
                 st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
@@ -324,7 +315,7 @@ def render_pdq_form():
         label = ctrl.get("label")
         key = f"pdq__{cid}"
 
-        # Skip removed controls (since the 3x3 matrix replaces them)
+        # Skip removed controls
         if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
             continue
 
@@ -363,30 +354,24 @@ def render_pdq_form():
                 default = float(saved) if saved is not None else float(min_v)
                 val = st.number_input(label, min_value=float(min_v), step=0.01, value=float(default), key=key)
                 st.session_state.form[cid] = float(val)
-
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
-    # ---- Replacement UI: single square 3x3 matrix ----
+    # ---- Replacement UI: EXACT sketch-style matrix ----
     st.markdown("#### Select Weight Tier and Complexity Level")
 
-    weight_tiers = ["0–5 lb", "5–10 lb", "10+ lb"]
-    complexity_levels = ["Low", "Medium", "High"]
+    # bottom-row numbers like your sketch
+    bottom_row = ("25%", "35%", "45%")
+    selected_rc = render_weight_complexity_sketch_matrix(key="selected_grid_rc", bottom_row_labels=bottom_row)
 
     # Placeholder factors (eventually read from catalog["policy"]["grid_factors"])
-    grid_factors = {
-        "0–5 lb_Low": 1.0,
-        "0–5 lb_Medium": 1.05,
-        "0–5 lb_High": 1.1,
-        "5–10 lb_Low": 1.05,
-        "5–10 lb_Medium": 1.1,
-        "5–10 lb_High": 1.15,
-        "10+ lb_Low": 1.1,
-        "10+ lb_Medium": 1.15,
-        "10+ lb_High": 1.2,
+    # Map (row, col) -> multiplier. You can adjust these later to match your real policy.
+    # Row = weight tier (top to bottom), Col = complexity (left to right)
+    grid_factor_by_rc = {
+        (0, 0): 1.00, (0, 1): 1.05, (0, 2): 1.10,
+        (1, 0): 1.05, (1, 1): 1.10, (1, 2): 1.15,
+        (2, 0): 1.10, (2, 1): 1.15, (2, 2): 1.20,
     }
-
-    selected_grid = render_weight_complexity_matrix(weight_tiers, complexity_levels, key="selected_grid")
 
     form = st.session_state.form
     rules = catalog.get("rules", {})
@@ -460,7 +445,11 @@ def render_pdq_form():
                     unit_factor = float(band.get("factor", 1.0))
 
     base_markup = float(policy.get("base_markup", 0.35))
-    grid_factor = grid_factors.get(selected_grid, 1.0) if selected_grid else 1.0
+
+    grid_factor = 1.0
+    if selected_rc is not None:
+        grid_factor = float(grid_factor_by_rc.get(tuple(selected_rc), 1.0))
+
     markup_pct = base_markup * grid_factor
 
     per_unit_parts_subtotal = 0.0
