@@ -210,97 +210,101 @@ def render_wc_grid(
     wrap_class = f"wc-wrap-{key}"
 
     st.markdown(
-        f"""
-        <style>
-          /* Scope all layout to this grid only */
-          .{wrap_class} div[data-testid="stHorizontalBlock"] {{
-            gap: 0 !important;
-            justify-content: flex-start !important;
-            width: fit-content !important;
-          }}
+    f"""
+    <style>
+      /* Target ONLY the 3-col rows that contain our grid buttons */
+      div[data-testid="stHorizontalBlock"]
+        :has(> div:nth-child(3))
+        :has(button[aria-label^="{aria_prefix}"]) {{
+        gap: 0 !important;
+        justify-content: flex-start !important;
+        width: fit-content !important;
+      }}
 
-          /* Prevent Streamlit columns from stretching */
-          .{wrap_class} div[data-testid="stHorizontalBlock"] > div {{
-            flex: 0 0 auto !important;
-          }}
+      /* Make each of the 3 columns exactly one cell wide */
+      div[data-testid="stHorizontalBlock"]
+        :has(> div:nth-child(3))
+        :has(button[aria-label^="{aria_prefix}"])
+        > div {{
+        flex: 0 0 {cell_px}px !important;
+        width: {cell_px}px !important;
+        max-width: {cell_px}px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }}
 
-          /* Force each column to exactly one cell wide */
-          .{wrap_class} div[data-testid="column"] {{
-            flex: 0 0 {cell_px}px !important;
-            width: {cell_px}px !important;
-            max-width: {cell_px}px !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-          }}
+      /* Remove button wrapper spacing */
+      div[data-testid="stHorizontalBlock"]
+        :has(> div:nth-child(3))
+        :has(button[aria-label^="{aria_prefix}"])
+        div[data-testid="stButton"] {{
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+      }}
 
-          /* Remove any extra spacing around buttons */
-          .{wrap_class} div[data-testid="stButton"] {{
-            margin: 0 !important;
-            padding: 0 !important;
-            display: block !important;
-          }}
+      /* Tile buttons */
+      button[aria-label^="{aria_prefix}"] {{
+        width: {cell_px}px !important;
+        height: {cell_px}px !important;
+        min-height: {cell_px}px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border: 2px solid #111827 !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+      }}
 
-          /* Tile buttons */
-          .{wrap_class} button[aria-label^="{aria_prefix}"] {{
-            width: {cell_px}px !important;
-            height: {cell_px}px !important;
-            min-height: {cell_px}px !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            border-radius: 0 !important;
-            border: 2px solid #111827 !important;
-            background: #ffffff !important;
-            box-shadow: none !important;
-            font-size: 0 !important;
-            line-height: 0 !important;
-          }}
+      /* Hide label text inside the button */
+      button[aria-label^="{aria_prefix}"] * {{
+        display: none !important;
+      }}
 
-          /* Hide any inner content so labels don't show */
-          .{wrap_class} button[aria-label^="{aria_prefix}"] * {{
-            display: none !important;
-          }}
+      button[aria-label^="{aria_prefix}"]:hover {{
+        background: #f3f4f6 !important;
+      }}
 
-          .{wrap_class} button[aria-label^="{aria_prefix}"]:hover {{
-            background: #f3f4f6 !important;
-          }}
+      /* Selected state */
+      button[aria-label="{selected_aria}"] {{
+        background: #e5e7eb !important;
+        outline: 2px solid #111827 !important;
+        outline-offset: -2px !important;
+      }}
 
-          /* Selected state (no :has()) */
-          .{wrap_class} button[aria-label="{selected_aria}"] {{
-            background: #e5e7eb !important;
-            outline: 2px solid #111827 !important;
-            outline-offset: -2px !important;
-          }}
+      button[aria-label^="{aria_prefix}"]:focus {{
+        outline: 2px solid #111827 !important;
+        outline-offset: -2px !important;
+      }}
 
-          .{wrap_class} button[aria-label^="{aria_prefix}"]:focus {{
-            outline: 2px solid #111827 !important;
-            outline-offset: -2px !important;
-          }}
+      /* Axis labels (unchanged) */
+      .wc-y {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #111827;
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        user-select: none;
+        padding: 0 6px;
+      }}
 
-          /* Axis labels */
-          .{wrap_class} .wc-y {{
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: #111827;
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
-            user-select: none;
-            padding: 0 6px;
-          }}
+      .wc-x {{
+        width: {size_px}px;
+        text-align: center;
+        margin-top: 10px;
+        font-weight: 700;
+        color: #111827;
+        user-select: none;
+      }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-          .{wrap_class} .wc-x {{
-            width: {size_px}px;
-            text-align: center;
-            margin-top: 10px;
-            font-weight: 700;
-            color: #111827;
-            user-select: none;
-          }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
     left, right = st.columns([0.10, 0.90], gap=None)
     with left:
