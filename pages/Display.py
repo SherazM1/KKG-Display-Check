@@ -439,21 +439,33 @@ def render_pdq_form() -> None:
     markup_pct = _matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
 
+    final_per_unit = final_total / max(qty, 1)
+
+    min_total = program_base * 1.25
+    max_total = program_base * 1.45
+
+    labels = [
+        ["Heavy", "Moderate/Heavy", "Complex/Heavy"],
+        ["Medium", "Moderate/Medium", "Complex/Medium"],
+        ["Light", "Moderate", "Complex"],
+    ]
+    sel_r, sel_c = selected_rc
+    selected_label = labels[int(sel_r)][int(sel_c)]
+
     left, right = st.columns([0.58, 0.42], gap="large")
 
-    # Totals now appear where the resolved parts table used to be (left column).
     with left:
         st.markdown("#### Totals")
-        st.write(f"Per-unit price (before quantity discount): **${per_unit_parts_subtotal:,.2f}**")
-        st.write(f"Per-unit price (after quantity discount): **${per_unit_after_tier:,.2f}**")
-        st.write(f"Program base (before markup): **${program_base:,.2f}**")
-        st.write(f"Final price (after markup): **${final_total:,.2f}**")
+        st.write(f"Selected tier: **{selected_label}**")
+        st.write(f"Final per-unit price (after everything): **${final_per_unit:,.2f}**")
+        st.write(f"Program total (after markup): **${final_total:,.2f}**")
+        st.write(f"Program total range (25%–45% markup): **${min_total:,.2f} – ${max_total:,.2f}**")
 
-    # Keep layout intact; right column intentionally empty for now.
     with right:
         st.empty()
 
     st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
+
 
 
 # ---------- Router ----------
