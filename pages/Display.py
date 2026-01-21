@@ -181,50 +181,75 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 
     return resolved
 
-
 def render_wc_grid(
     *,
     key: str = "wc_idx",
-    size_px: int = 360,
+    size_px: int = 420,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
-    gap: str = "small",
+    gap: str = "xxsmall",
 ) -> Tuple[int, int]:
     """
-    Reliable 3×3 grid with working buttons (pure Streamlit; no iframe/DOM hacks).
+    3×3 tile grid (pure Streamlit, reliable buttons) with fixed labels in exact positions.
 
-    - Each cell is a bordered tile (container) with a small Select/Selected button.
-    - Single active selection stored in st.session_state[key] as idx 0..8.
-    - Returns (row, col).
+    Labels (top->bottom, left->right):
+      Heavy | Moderate/Heavy | Complex/Heavy
+      Medium | Moderate/Medium | Complex/Medium
+      Light | Moderate | Complex
 
-    Args:
-        key: session_state key used to store selected idx.
-        size_px: overall grid size hint; tiles clamp to a reasonable range.
-        default_rc: default selected (row, col) if nothing selected yet.
-        gap: Streamlit columns gap ("small", "medium", "large", "xxsmall", etc.).
+    Single active selection stored in st.session_state[key] as idx 0..8.
+    Returns (row, col).
     """
-    # Keep tiles square-ish and readable
-    cell_px = int(min(120, max(84, size_px // 3)))
-    default_idx = int(default_rc[0] * 3 + default_rc[1])
+    labels = [
+        ["Heavy", "Moderate/Heavy", "Complex/Heavy"],
+        ["Medium", "Moderate/Medium", "Complex/Medium"],
+        ["Light", "Moderate", "Complex"],
+    ]
 
+    # Scale down vs prior versions; clamp so it stays compact even if caller passes 420+
+    # This yields ~96–104px tiles for typical inputs, which fits label + button w/o scroll.
+    cell_px = int(min(104, max(92, size_px // 4)))
+
+    default_idx = int(default_rc[0] * 3 + default_rc[1])
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
     st.session_state[key] = selected_idx
 
-    # Tighten the button a bit globally (safe + simple)
     st.markdown(
-        """
+        f"""
         <style>
-          div[data-testid="stButton"] button {
-            padding: 0.20rem 0.55rem !important;
+          /* Compact buttons so tile never needs scrolling */
+          div[data-testid="stButton"] button {{
+            padding: 0.18rem 0.45rem !important;
             font-weight: 700 !important;
             border-radius: 10px !important;
-          }
+          }}
+
+          /* Label styling inside tiles */
+          .wc-cell-label {{
+            font-weight: 800;
+            font-size: 13px;
+            line-height: 1.05;
+            text-align: center;
+            color: #111827;
+            user-select: none;
+            margin-top: 2px;
+            margin-bottom: 0px;
+            white-space: normal;
+            overflow-wrap: anywhere; /* allows Moderate/Medium etc to wrap if needed */
+          }}
+
+          /* Small selection indicator bar */
+          .wc-ind {{
+            height: 6px;
+            width: 100%;
+            border-radius: 999px;
+            margin: 2px 0 8px 0;
+          }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Render 3×3
     for r in range(3):
         cols = st.columns(3, gap=gap)
         for c in range(3):
@@ -234,33 +259,26 @@ def render_wc_grid(
             with cols[c]:
                 tile = st.container(border=True, height=cell_px)
                 with tile:
-                    # Visual indicator without relying on styling the container border
                     st.markdown(
-                        f"""
-                        <div style="
-                          height: 6px;
-                          width: 100%;
-                          border-radius: 999px;
-                          background: {'#111827' if is_selected else '#e5e7eb'};
-                          margin: 2px 0 10px 0;">
-                        </div>
-                        """,
+                        f"<div class='wc-ind' style='background:{'#111827' if is_selected else '#e5e7eb'};'></div>",
                         unsafe_allow_html=True,
                     )
 
-                    # Spacer so button reads as "inside the box" (near top-ish, not stretched)
-                    st.markdown(
-                        f"<div style='height:{max(10, cell_px - 64)}px;'></div>",
-                        unsafe_allow_html=True,
-                    )
+                    # exact text, but allow wrapping if needed (no scroll)
+                    st.markdown(f"<div class='wc-cell-label'>{labels[r][c]}</div>", unsafe_allow_html=True)
 
-                    label = "Selected" if is_selected else "Select"
-                    if st.button(label, key=f"{key}__{idx}", use_container_width=True):
+                    # spacer tuned so label + button fit into the fixed height
+                    # (keeps everything visible, no internal scroll)
+                    spacer_h = max(4, cell_px - 72)
+                    st.markdown(f"<div style='height:{spacer_h}px;'></div>", unsafe_allow_html=True)
+
+                    btn_text = "Selected" if is_selected else "Select"
+                    if st.button(btn_text, key=f"{key}__{idx}", use_container_width=True):
                         st.session_state[key] = idx
                         st.rerun()
 
-    r, c = divmod(int(st.session_state[key]), 3)
-    return int(r), int(c)
+    rr, cc = divmod(int(st.session_state[key]), 3)
+    return int(rr), int(cc)
 
 
 def wc_idx_to_rc(idx: int) -> Tuple[int, int]:
