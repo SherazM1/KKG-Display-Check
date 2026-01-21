@@ -187,145 +187,67 @@ def render_wc_grid(
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    Render a reliable 3×3 clickable grid (single-select) using Streamlit buttons.
+    3×3 tile grid using Streamlit containers (doc-style), each with a Select button.
+    Single active selection stored in st.session_state[key] as idx 0..8.
 
     Returns:
-        (row, col) with row/col in [0..2].
-
-    Notes:
-        - Single active cell at a time (stored in st.session_state[key] as idx 0..8).
-        - Uses button labels only for accessibility; text is visually hidden.
-        - Styling is scoped via aria-label prefix so it won't affect other buttons.
-        - Layout is fixed-width and uses zero-gaps so tiles touch (no whitespace).
+        (row, col)
     """
-    cell_px = max(40, int(size_px) // 3)
-    size_px = cell_px * 3
-
+    cell_px = max(90, int(size_px) // 3)
     default_idx = int(default_rc[0] * 3 + default_rc[1])
+
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
 
-    aria_prefix = f"__wcgrid__{key}__"
-    selected_aria = f"{aria_prefix}{selected_idx}"
-    wrap_class = f"wc-wrap-{key}"
-
+    # Optional: small styling for consistent tile padding + selected badge look
     st.markdown(
-    f"""
-    <style>
-      /* Target ONLY the 3-col rows that contain our grid buttons */
-      div[data-testid="stHorizontalBlock"]
-        :has(> div:nth-child(3))
-        :has(button[aria-label^="{aria_prefix}"]) {{
-        gap: 0 !important;
-        justify-content: flex-start !important;
-        width: fit-content !important;
-      }}
+        """
+        <style>
+          .wc-badge {
+            display:inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+            border: 1px solid #11182722;
+            background: #11182708;
+          }
+          .wc-badge.on {
+            border: 1px solid #111827;
+            background: #e5e7eb;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-      /* Make each of the 3 columns exactly one cell wide */
-      div[data-testid="stHorizontalBlock"]
-        :has(> div:nth-child(3))
-        :has(button[aria-label^="{aria_prefix}"])
-        > div {{
-        flex: 0 0 {cell_px}px !important;
-        width: {cell_px}px !important;
-        max-width: {cell_px}px !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-      }}
+    st.markdown("#### Select Weight Tier and Complexity Level")
 
-      /* Remove button wrapper spacing */
-      div[data-testid="stHorizontalBlock"]
-        :has(> div:nth-child(3))
-        :has(button[aria-label^="{aria_prefix}"])
-        div[data-testid="stButton"] {{
-        margin: 0 !important;
-        padding: 0 !important;
-        display: block !important;
-      }}
-
-      /* Tile buttons */
-      button[aria-label^="{aria_prefix}"] {{
-        width: {cell_px}px !important;
-        height: {cell_px}px !important;
-        min-height: {cell_px}px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border: 2px solid #111827 !important;
-        background: #ffffff !important;
-        box-shadow: none !important;
-        font-size: 0 !important;
-        line-height: 0 !important;
-      }}
-
-      /* Hide label text inside the button */
-      button[aria-label^="{aria_prefix}"] * {{
-        display: none !important;
-      }}
-
-      button[aria-label^="{aria_prefix}"]:hover {{
-        background: #f3f4f6 !important;
-      }}
-
-      /* Selected state */
-      button[aria-label="{selected_aria}"] {{
-        background: #e5e7eb !important;
-        outline: 2px solid #111827 !important;
-        outline-offset: -2px !important;
-      }}
-
-      button[aria-label^="{aria_prefix}"]:focus {{
-        outline: 2px solid #111827 !important;
-        outline-offset: -2px !important;
-      }}
-
-      /* Axis labels (unchanged) */
-      .wc-y {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        color: #111827;
-        writing-mode: vertical-rl;
-        transform: rotate(180deg);
-        user-select: none;
-        padding: 0 6px;
-      }}
-
-      .wc-x {{
-        width: {size_px}px;
-        text-align: center;
-        margin-top: 10px;
-        font-weight: 700;
-        color: #111827;
-        user-select: none;
-      }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-    left, right = st.columns([0.10, 0.90], gap=None)
+    # Keep axis labels simple and stable
+    left, right = st.columns([0.12, 0.88], gap="small")
     with left:
-        st.markdown(f"<div class='{wrap_class} wc-y'>Weight</div>", unsafe_allow_html=True)
-
+        st.markdown("**Weight**")
     with right:
-        st.markdown(f"<div class='{wrap_class}'>", unsafe_allow_html=True)
+        # Build 3 rows of 3 tiles
+        for rr in range(3):
+            cols = st.columns(3, gap="small")
+            for cc in range(3):
+                idx = rr * 3 + cc
+                with cols[cc]:
+                    tile = st.container(border=True, height=cell_px)
 
-        grid_col, _ = st.columns([size_px, 1], gap=None)
-        with grid_col:
-            for rr in range(3):
-                cols = st.columns(3, gap=None)
-                for cc in range(3):
-                    idx = rr * 3 + cc
-                    aria_label = f"{aria_prefix}{idx}"
-                    with cols[cc]:
-                        if st.button(aria_label, key=f"{key}__btn__{idx}", use_container_width=False):
+                    with tile:
+                        is_selected = (idx == selected_idx)
+                        badge_cls = "wc-badge on" if is_selected else "wc-badge"
+                        badge_txt = "Selected" if is_selected else "Not selected"
+                        st.markdown(f"<span class='{badge_cls}'>{badge_txt}</span>", unsafe_allow_html=True)
+
+                        st.write("")  # spacer
+                        if st.button("Select", key=f"{key}__tile__{idx}", use_container_width=True):
                             st.session_state[key] = idx
+                            selected_idx = idx
 
-        st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("**Complexity**")
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
     return int(r), int(c)
