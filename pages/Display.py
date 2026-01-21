@@ -185,140 +185,88 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 def render_wc_grid(
     *,
     key: str = "wc_idx",
-    size_px: int = 300,
-    default_rc: Tuple[int, int] = (2, 0),
+    size_px: int = 360,
+    default_rc: Tuple[int, int] = (2, 0),  # bottom-left
+    gap: str = "small",
 ) -> Tuple[int, int]:
     """
-    Locked 3×3 grid rendered as HTML/CSS.
-    Clicks work by navigating the TOP page to ?{key}=idx (target=_top),
-    which triggers a Streamlit rerun. Single-select stored in session_state[key].
+    Reliable 3×3 grid with working buttons (pure Streamlit; no iframe/DOM hacks).
+
+    - Each cell is a bordered tile (container) with a small Select/Selected button.
+    - Single active selection stored in st.session_state[key] as idx 0..8.
+    - Returns (row, col).
+
+    Args:
+        key: session_state key used to store selected idx.
+        size_px: overall grid size hint; tiles clamp to a reasonable range.
+        default_rc: default selected (row, col) if nothing selected yet.
+        gap: Streamlit columns gap ("small", "medium", "large", "xxsmall", etc.).
     """
-    cell_px = max(64, min(110, int(size_px) // 3))
-    grid_px = cell_px * 3
+    # Keep tiles square-ish and readable
+    cell_px = int(min(120, max(84, size_px // 3)))
     default_idx = int(default_rc[0] * 3 + default_rc[1])
-
-    # --- Read current selection from query params (if present) ---
-    idx_from_qp = None
-    try:
-        qp = st.query_params
-        raw = qp.get(key)
-        if raw is not None:
-            raw_val = raw[0] if isinstance(raw, list) else raw
-            idx_from_qp = int(raw_val)
-    except Exception:
-        idx_from_qp = None
-
-    if idx_from_qp is not None and 0 <= idx_from_qp <= 8:
-        st.session_state[key] = idx_from_qp
 
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
     st.session_state[key] = selected_idx
 
-    # --- Preserve other query params when generating hrefs ---
-    params = {}
-    try:
-        for k, v in st.query_params.items():
-            if k == key:
-                continue
-            params[k] = v
-    except Exception:
-        pass
+    # Tighten the button a bit globally (safe + simple)
+    st.markdown(
+        """
+        <style>
+          div[data-testid="stButton"] button {
+            padding: 0.20rem 0.55rem !important;
+            font-weight: 700 !important;
+            border-radius: 10px !important;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    def href_for(idx: int) -> str:
-        merged = dict(params)
-        merged[key] = str(idx)
-        return "?" + urlencode(merged, doseq=True)
+    # Render 3×3
+    for r in range(3):
+        cols = st.columns(3, gap=gap)
+        for c in range(3):
+            idx = r * 3 + c
+            is_selected = idx == selected_idx
 
-    # --- Build the 3×3 cells as <a> links that navigate the TOP page ---
-    cells_html = []
-    for idx in range(9):
-        is_selected = idx == selected_idx
-        cls = "cell selected" if is_selected else "cell"
-        pill = "Selected" if is_selected else "Select"
-        href = html.escape(href_for(idx), quote=True)
+            with cols[c]:
+                tile = st.container(border=True, height=cell_px)
+                with tile:
+                    # Visual indicator without relying on styling the container border
+                    st.markdown(
+                        f"""
+                        <div style="
+                          height: 6px;
+                          width: 100%;
+                          border-radius: 999px;
+                          background: {'#111827' if is_selected else '#e5e7eb'};
+                          margin: 2px 0 10px 0;">
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-        cells_html.append(
-            f"""
-            <a class="{cls}" href="{href}" target="_top" rel="noopener">
-              <span class="pill">{pill}</span>
-            </a>
-            """
-        )
+                    # Spacer so button reads as "inside the box" (near top-ish, not stretched)
+                    st.markdown(
+                        f"<div style='height:{max(10, cell_px - 64)}px;'></div>",
+                        unsafe_allow_html=True,
+                    )
 
-    html_block = f"""
-    <div class="wc-wrap">
-      <div class="grid">
-        {''.join(cells_html)}
-      </div>
-    </div>
+                    label = "Selected" if is_selected else "Select"
+                    if st.button(label, key=f"{key}__{idx}", use_container_width=True):
+                        st.session_state[key] = idx
+                        st.rerun()
 
-    <style>
-      .wc-wrap {{
-        width: {grid_px + 40}px;   /* extra so nothing clips */
-        padding: 6px;
-        overflow: visible;
-      }}
-
-      .grid {{
-        display: grid;
-        grid-template-columns: repeat(3, {cell_px}px);
-        grid-template-rows: repeat(3, {cell_px}px);
-        gap: 12px;
-      }}
-
-      .cell {{
-        box-sizing: border-box;
-        border: 1px solid #d1d5db;
-        border-radius: 12px;
-        background: #ffffff;
-        width: {cell_px}px;
-        height: {cell_px}px;
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding-top: 10px;
-        text-decoration: none;
-        cursor: pointer;
-      }}
-
-      .cell:hover {{
-        background: #f9fafb;
-        border-color: #9ca3af;
-      }}
-
-      .cell.selected {{
-        background: #eef2ff;
-        border-color: #111827;
-        box-shadow: inset 0 0 0 1px #111827;
-      }}
-
-      .pill {{
-        display: inline-block;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-        font-size: 12px;
-        font-weight: 700;
-        padding: 6px 10px;
-        border: 1px solid #d1d5db;
-        border-radius: 10px;
-        background: #ffffff;
-        color: #111827;
-        line-height: 1;
-        user-select: none;
-      }}
-
-      .cell.selected .pill {{
-        border-color: #111827;
-        background: #e5e7eb;
-      }}
-    </style>
-    """
-
-    # Give iframe plenty of room
-    components.html(html_block, height=grid_px + 80, width=grid_px + 120)
-
-    r, c = divmod(selected_idx, 3)
+    r, c = divmod(int(st.session_state[key]), 3)
     return int(r), int(c)
+
+
+def wc_idx_to_rc(idx: int) -> Tuple[int, int]:
+    """Helper for readability elsewhere."""
+    idx = min(8, max(0, int(idx)))
+    return divmod(idx, 3)
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
     """policy['matrix_markups'] must be a 3×3 list of decimals (e.g. 0.35)."""
