@@ -212,14 +212,28 @@ def render_wc_grid(
     st.markdown(
         f"""
         <style>
-          /* Scope all layout tightening to this grid only */
+          /* Scope all layout to this grid only */
           .{wrap_class} div[data-testid="stHorizontalBlock"] {{
             gap: 0 !important;
+            justify-content: flex-start !important;
+            width: fit-content !important;
           }}
+
+          /* Prevent Streamlit columns from stretching */
+          .{wrap_class} div[data-testid="stHorizontalBlock"] > div {{
+            flex: 0 0 auto !important;
+          }}
+
+          /* Force each column to exactly one cell wide */
           .{wrap_class} div[data-testid="column"] {{
+            flex: 0 0 {cell_px}px !important;
+            width: {cell_px}px !important;
+            max-width: {cell_px}px !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
           }}
+
+          /* Remove any extra spacing around buttons */
           .{wrap_class} div[data-testid="stButton"] {{
             margin: 0 !important;
             padding: 0 !important;
@@ -230,6 +244,7 @@ def render_wc_grid(
           .{wrap_class} button[aria-label^="{aria_prefix}"] {{
             width: {cell_px}px !important;
             height: {cell_px}px !important;
+            min-height: {cell_px}px !important;
             padding: 0 !important;
             margin: 0 !important;
             border-radius: 0 !important;
@@ -238,7 +253,6 @@ def render_wc_grid(
             box-shadow: none !important;
             font-size: 0 !important;
             line-height: 0 !important;
-            min-height: {cell_px}px !important;
           }}
 
           /* Hide any inner content so labels don't show */
@@ -250,6 +264,7 @@ def render_wc_grid(
             background: #f3f4f6 !important;
           }}
 
+          /* Selected state (no :has()) */
           .{wrap_class} button[aria-label="{selected_aria}"] {{
             background: #e5e7eb !important;
             outline: 2px solid #111827 !important;
@@ -273,6 +288,7 @@ def render_wc_grid(
             user-select: none;
             padding: 0 6px;
           }}
+
           .{wrap_class} .wc-x {{
             width: {size_px}px;
             text-align: center;
@@ -304,7 +320,7 @@ def render_wc_grid(
                         if st.button(aria_label, key=f"{key}__btn__{idx}", use_container_width=False):
                             st.session_state[key] = idx
 
-        st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
+        st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
