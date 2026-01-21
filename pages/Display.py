@@ -342,21 +342,22 @@ def render_pdq_form():
             df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])
             st.table(df)
 
-        st.markdown("#### Unit tier match")
-        st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")
+    # st.markdown("#### Unit tier match")
+# st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")
 
-        st.markdown("#### Weight & Markup")
-        weight_str = _round_display_weight(total_lbs, policy)
-        st.write(
-            f"Total weight: **{weight_str} lb**  "
-            f"<span class='pill'>unit={unit_weight_val:g} {unit_weight_unit}</span>"
-            f"<span class='pill'>qty={qty}</span>",
-            unsafe_allow_html=True,
-        )
-        st.write(
-            f"Markup breakdown: Base **{base_markup*100:.0f}%** + Weight **{weight_add*100:.0f}%** + Complexity **{complexity_add*100:.0f}%** "
-            f"= **{markup_pct*100:.0f}%**"
-        )
+# st.markdown("#### Weight & Markup")
+# weight_str = _round_display_weight(total_lbs, policy)
+# st.write(
+#     f"Total weight: **{weight_str} lb**  "
+#     f"<span class='pill'>unit={unit_weight_val:g} {unit_weight_unit}</span>"
+#     f"<span class='pill'>qty={qty}</span>",
+#     unsafe_allow_html=True,
+# )
+# st.write(
+#     f"Markup breakdown: Base **{base_markup*100:.0f}%** + Weight **{weight_add*100:.0f}%** + Complexity **{complexity_add*100:.0f}%** "
+#     f"= **{markup_pct*100:.0f}%**"
+# )
+
 
     with right:
         st.markdown("#### Totals")
