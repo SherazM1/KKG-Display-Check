@@ -9,10 +9,10 @@ import os
 import textwrap
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 from PIL import Image, ImageOps
 
 # ---------- Page setup ----------
@@ -141,7 +141,7 @@ def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image
     return padded.convert("RGB")
 
 
-# ---------- Query param + matrix component ----------
+# ---------- Query param helpers ----------
 def _get_query_param(name: str) -> Optional[str]:
     try:
         qp = st.query_params
@@ -160,6 +160,33 @@ def _get_query_param(name: str) -> Optional[str]:
             return None
 
 
+def _current_query_params() -> Dict[str, str]:
+    try:
+        qp = st.query_params
+        out: Dict[str, str] = {}
+        for k in qp.keys():
+            v = qp.get(k)
+            if isinstance(v, list):
+                if v:
+                    out[str(k)] = str(v[0])
+            elif v is not None:
+                out[str(k)] = str(v)
+        return out
+    except Exception:
+        try:
+            qp = st.experimental_get_query_params()
+            out = {}
+            for k, v in qp.items():
+                if isinstance(v, list):
+                    if v:
+                        out[str(k)] = str(v[0])
+                elif v is not None:
+                    out[str(k)] = str(v)
+            return out
+        except Exception:
+            return {}
+
+
 def _parse_rc(value: str) -> Optional[Tuple[int, int]]:
     try:
         r_s, c_s = [p.strip() for p in value.split(",")]
@@ -170,24 +197,42 @@ def _parse_rc(value: str) -> Optional[Tuple[int, int]]:
     except Exception:
         return None
 
-def render_weight_complexity_matrix_component(
+
+def _href_with_param(param_key: str, param_val: str) -> str:
+    params = _current_query_params()
+    params[param_key] = param_val
+    return f"?{urlencode(params)}"
+
+
+# ---------- Working grid (HTML in main DOM, no iframe) ----------
+def render_weight_complexity_matrix(
     key: str = "wc",
     default: Tuple[int, int] = (2, 0),  # bottom-left
     size_px: int = 420,
 ) -> Tuple[int, int]:
     """
-    Streamlit-native clickable 3x3 matrix that preserves the same square-grid look.
+    Pixel-perfect 3x3 grid rendered in the main Streamlit DOM (not an iframe).
+    Each cell is a link to ?key=r,c so Streamlit reruns and totals update.
 
-    - Clicks rerun the app (Streamlit buttons), so totals update.
-    - Selected cell highlights.
-    - Default is bottom-left (2,0).
-    - Blank cells (no text).
+    - Blank cells (no text)
+    - Selected cell highlights
+    - Default selection bottom-left (2,0)
+    - Left-aligned under the header
     """
+    qp_val = _get_query_param(key)
+    qp_rc = _parse_rc(qp_val) if qp_val else None
+
     if key not in st.session_state:
-        st.session_state[key] = default
+        st.session_state[key] = qp_rc if qp_rc is not None else default
+    elif qp_rc is not None and tuple(st.session_state[key]) != qp_rc:
+        st.session_state[key] = qp_rc
 
     r_sel, c_sel = st.session_state[key]
-    cell_px = int(size_px / 3)
+
+    def cell(r: int, c: int) -> str:
+        selected = " selected" if (r == r_sel and c == c_sel) else ""
+        href = _href_with_param(key, f"{r},{c}")
+        return f"<a class='wc-cell{selected}' data-r='{r}' data-c='{c}' href='{href}'></a>"
 
     st.markdown(
         textwrap.dedent(
@@ -198,6 +243,7 @@ def render_weight_complexity_matrix_component(
                 align-items:stretch;
                 gap:14px;
                 margin: 8px 0 6px;
+                width: 100%;
               }}
               .wc-y {{
                 display:flex;
@@ -213,57 +259,37 @@ def render_weight_complexity_matrix_component(
               .wc-mid {{
                 display:flex;
                 flex-direction:column;
-                align-items:flex-start;
+                align-items:flex-start; /* left aligned */
               }}
               .wc-square {{
                 width: {size_px}px;
                 height: {size_px}px;
                 border: 2px solid #111827;
                 background:#fff;
+                display:grid;
+                grid-template-columns: repeat(3, 1fr);
+                grid-template-rows: repeat(3, 1fr);
                 box-sizing:border-box;
                 overflow:hidden;
               }}
-              .wc-grid {{
-                width: 100%;
-                height: 100%;
-              }}
-
-              /* Kill Streamlit column spacing inside our grid only */
-              .wc-grid div[data-testid="stHorizontalBlock"] {{
-                gap: 0rem !important;
-              }}
-              .wc-grid div[data-testid="column"] {{
-                padding: 0 !important;
-              }}
-
               .wc-cell {{
-                width: 100%;
-                height: {cell_px}px;
+                display:block;
                 border-right: 2px solid #111827;
                 border-bottom: 2px solid #111827;
-                box-sizing:border-box;
                 background:#ffffff;
+                cursor:pointer;
+                user-select:none;
+                text-decoration:none;
               }}
-              .wc-cell.edge-right {{ border-right: none; }}
-              .wc-cell.edge-bottom {{ border-bottom: none; }}
+              .wc-cell[data-c="2"] {{ border-right: none; }}
+              .wc-cell[data-r="2"] {{ border-bottom: none; }}
+
+              .wc-cell:hover {{ background:#f3f4f6; }}
+
               .wc-cell.selected {{
                 background:#e5e7eb;
                 outline: 2px solid #111827;
                 outline-offset: -2px;
-              }}
-
-              /* Make the Streamlit button fill the cell and look invisible */
-              .wc-cell div[data-testid="stButton"] > button {{
-                width: 100% !important;
-                height: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                border: none !important;
-                background: transparent !important;
-                border-radius: 0 !important;
-              }}
-              .wc-cell div[data-testid="stButton"] {{
-                height: 100%;
               }}
 
               .wc-x {{
@@ -274,45 +300,32 @@ def render_weight_complexity_matrix_component(
                 color:#111827;
                 user-select:none;
               }}
+
+              @media (max-width: 520px) {{
+                .wc-square {{
+                  width: 100%;
+                  height: auto;
+                  aspect-ratio: 1 / 1;
+                }}
+                .wc-x {{ width: 100%; }}
+              }}
             </style>
+
+            <div class="wc-wrap">
+              <div class="wc-y">Weight</div>
+              <div class="wc-mid">
+                <div class="wc-square" role="grid" aria-label="Weight vs Complexity">
+                  {cell(0,0)}{cell(0,1)}{cell(0,2)}
+                  {cell(1,0)}{cell(1,1)}{cell(1,2)}
+                  {cell(2,0)}{cell(2,1)}{cell(2,2)}
+                </div>
+                <div class="wc-x">Complexity</div>
+              </div>
+            </div>
             """
         ),
         unsafe_allow_html=True,
     )
-
-    left_col, right_col = st.columns([0.10, 0.90], gap="small")
-    with left_col:
-        st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
-
-    with right_col:
-        st.markdown("<div class='wc-mid'>", unsafe_allow_html=True)
-        st.markdown("<div class='wc-square'><div class='wc-grid'>", unsafe_allow_html=True)
-
-        for r in range(3):
-            cols = st.columns(3, gap="small")
-            for c in range(3):
-                edge_right = (c == 2)
-                edge_bottom = (r == 2)
-                selected = (r == r_sel and c == c_sel)
-
-                classes = ["wc-cell"]
-                if edge_right:
-                    classes.append("edge-right")
-                if edge_bottom:
-                    classes.append("edge-bottom")
-                if selected:
-                    classes.append("selected")
-                cls = " ".join(classes)
-
-                with cols[c]:
-                    st.markdown(f"<div class='{cls}'>", unsafe_allow_html=True)
-                    if st.button(" ", key=f"{key}_{r}_{c}", use_container_width=True):
-                        st.session_state[key] = (r, c)
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("</div></div>", unsafe_allow_html=True)
-        st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     return st.session_state[key]
 
@@ -500,7 +513,7 @@ def render_pdq_form() -> None:
 
     # ---- Grid-driven markup (ONLY source of markup) ----
     st.markdown("#### Select Weight Tier and Complexity Level")
-    selected_rc = render_weight_complexity_matrix_component(key="wc", default=(1, 1), size_px=420)
+    selected_rc = render_weight_complexity_matrix(key="wc", default=(2, 0), size_px=420)
 
     # ---- Resolve parts and compute totals ----
     resolved = _resolve_parts_per_unit(catalog, form)
@@ -510,7 +523,6 @@ def render_pdq_form() -> None:
 
     per_unit_parts_subtotal = sum(_parts_value(catalog, part_key) * q for part_key, q in resolved)
     per_unit_after_tier = per_unit_parts_subtotal * unit_factor
-
     program_base = per_unit_after_tier * qty
 
     markup_pct = _matrix_markup_pct(policy, tuple(selected_rc), fallback=0.35)
