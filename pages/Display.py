@@ -248,6 +248,10 @@ def render_pdq_form():
         "10+ lb_High": 1.2,
     }
     
+    # Initialize selected_grid from session state
+    if "selected_grid" not in st.session_state:
+        st.session_state.selected_grid = None
+    
     # Render grid
     for wt in weight_tiers:
         cols = st.columns(4)
@@ -255,12 +259,16 @@ def render_pdq_form():
             st.markdown(f"**{wt}**")
         for i, cx in enumerate(complexity_levels):
             with cols[i + 1]:
-                if st.button(cx, key=f"grid_{wt}_{cx}"):
+                if st.button("", key=f"grid_{wt}_{cx}"):
                     st.session_state.selected_grid = f"{wt}_{cx}"
     
-    selected_grid = st.session_state.get("selected_grid")
-    if selected_grid:
-        st.success(f"Selected: {selected_grid.replace('_', ' ')}")
+    # Complexity labels at the bottom
+    cols = st.columns(4)
+    with cols[0]:
+        st.write("")
+    for i, cx in enumerate(complexity_levels):
+        with cols[i + 1]:
+            st.markdown(f"**{cx}**")
 
     form = st.session_state.form
     rules = catalog.get("rules", {})
@@ -336,6 +344,7 @@ def render_pdq_form():
     # Removed weight calculations (total_lbs, weight_add, complexity_add)
 
     base_markup = float(policy.get("base_markup", 0.35))
+    selected_grid = st.session_state.selected_grid
     grid_factor = grid_factors.get(selected_grid, 1.0) if selected_grid else 1.0
     markup_pct = base_markup * grid_factor
 
