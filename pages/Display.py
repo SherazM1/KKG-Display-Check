@@ -185,6 +185,7 @@ def render_weight_complexity_grid(
     key: str = "wc_idx",
     size_px: int = 420,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
+    bottom_row_labels: Tuple[str, str, str] = ("25%", "35%", "45%"),
 ) -> Tuple[int, int]:
     """
     A real Streamlit control (st.radio) forced into a 3×3 square via scoped CSS.
@@ -192,11 +193,14 @@ def render_weight_complexity_grid(
     - No new tabs
     - Click reruns -> totals update
     - Selected cell highlights
-    - Blank cells (labels hidden)
+    - Blank cells (labels hidden except bottom row)
     - Default selection bottom-left
     """
     cell_px = int(size_px / 3)
     default_index = int(default_rc[0] * 3 + default_rc[1])
+
+    # Labels: blank for top 6, bottom row labels for last 3
+    labels = [""] * 6 + list(bottom_row_labels)
 
     st.markdown(
         textwrap.dedent(
@@ -247,9 +251,19 @@ def render_weight_complexity_grid(
                 margin: 0 !important;
               }}
 
-              /* Hide option text (keep blank cells) */
+              /* Hide option text for top rows, show for bottom row */
               #wc-grid-marker + div[data-testid="stRadio"] label span {{
                 display: none !important;
+              }}
+              #wc-grid-marker + div[data-testid="stRadio"] label:nth-last-child(-n+3) span {{
+                display: block !important;
+                position: absolute;
+                bottom: 4px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 12px;
+                font-weight: 600;
+                color: #111827;
               }}
 
               /* Hover */
@@ -306,10 +320,11 @@ def render_weight_complexity_grid(
         # Marker must be immediately before st.radio to scope CSS reliably
         st.markdown("<span id='wc-grid-marker'></span>", unsafe_allow_html=True)
 
-        # Keep labels unique; we hide them anyway
+        # Use labels for bottom row
         idx = st.radio(
             "",
             options=list(range(9)),
+            format_func=lambda i: labels[i],
             index=st.session_state.get(key, default_index),
             key=key,
             label_visibility="collapsed",
