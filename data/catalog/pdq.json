@@ -100,7 +100,7 @@
     },
     {
       "id": "unit_weight_unit",
-      "label": "Unit Weight — Unit",
+      "label": "Product Weight",
       "type": "single",
       "required": true,
       "options": [
