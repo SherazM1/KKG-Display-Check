@@ -181,6 +181,7 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 
     return resolved
 
+
 def render_wc_grid(
     *,
     key: str = "wc_idx",
@@ -203,7 +204,6 @@ def render_wc_grid(
         ["Light", "Moderate", "Complex"],
     ]
 
-    # Control "visual size" primarily via tile width; height will follow content (no scroll).
     cell_px = int(min(110, max(88, size_px // 3)))
 
     default_idx = int(default_rc[0] * 3 + default_rc[1])
@@ -214,12 +214,10 @@ def render_wc_grid(
     st.markdown(
         f"""
         <style>
-          /* Make each column feel like a square tile by constraining width */
           div[data-testid="column"] {{
             min-width: {cell_px}px !important;
           }}
 
-          /* Compact button everywhere in this section (Streamlit doesn't allow per-button CSS cleanly) */
           div[data-testid="stButton"] button {{
             padding: 0.18rem 0.45rem !important;
             font-weight: 700 !important;
@@ -228,7 +226,7 @@ def render_wc_grid(
 
           .wc-cell-label {{
             font-weight: 800;
-            font-size: 15px;     /* bigger, since we removed forced height */
+            font-size: 15px;
             line-height: 1.1;
             text-align: center;
             color: #111827;
@@ -256,7 +254,6 @@ def render_wc_grid(
             is_selected = idx == selected_idx
 
             with cols[c]:
-                # IMPORTANT: no fixed height => no internal scroll
                 tile = st.container(border=True)
                 with tile:
                     st.markdown(
@@ -278,6 +275,7 @@ def wc_idx_to_rc(idx: int) -> Tuple[int, int]:
     """Helper for readability elsewhere."""
     idx = min(8, max(0, int(idx)))
     return divmod(idx, 3)
+
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
     """policy['matrix_markups'] must be a 3×3 list of decimals (e.g. 0.35)."""
@@ -442,25 +440,18 @@ def render_pdq_form() -> None:
     final_total = program_base * (1.0 + markup_pct)
 
     left, right = st.columns([0.58, 0.42], gap="large")
-    with left:
-        st.markdown("#### Resolved parts (per unit)")
-        if not resolved:
-            st.caption("Nothing resolved yet (all base values are 0).")
-        else:
-            rows = []
-            for part_key, q in resolved:
-                unit_val = _parts_value(catalog, part_key)
-                line = unit_val * q
-                label = catalog.get("parts", {}).get(part_key, {}).get("label", part_key)
-                rows.append({"Part": label, "Qty": q, "Unit $": f"{unit_val:,.2f}", "Line $": f"{line:,.2f}"})
-            st.table(pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"]))
 
-    with right:
+    # Totals now appear where the resolved parts table used to be (left column).
+    with left:
         st.markdown("#### Totals")
         st.write(f"Per-unit price (before quantity discount): **${per_unit_parts_subtotal:,.2f}**")
         st.write(f"Per-unit price (after quantity discount): **${per_unit_after_tier:,.2f}**")
         st.write(f"Program base (before markup): **${program_base:,.2f}**")
         st.write(f"Final price (after markup): **${final_total:,.2f}**")
+
+    # Keep layout intact; right column intentionally empty for now.
+    with right:
+        st.empty()
 
     st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
