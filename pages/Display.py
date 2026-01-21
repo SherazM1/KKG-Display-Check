@@ -183,17 +183,18 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 def render_wc_grid(
     *,
     key: str = "wc_idx",
-    size_px: int = 300,
+    size_px: int = 420,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
     3×3 tile grid using Streamlit containers (stable), single-select.
     - No header inside (caller controls headings)
     - Weight label tight on the left
-    - Complexity centered directly under grid
-    - Compact, square-ish tiles
+    - Complexity centered directly under the grid (under tiles, not page)
+    - Smaller, square tiles (clamped even if caller passes big size_px)
     """
-    cell_px = max(72, int(size_px) // 3)  # smaller tiles
+    # Clamp so it stays compact even if caller passes 420+
+    cell_px = int(min(110, max(78, size_px // 3)))
     grid_w_px = cell_px * 3
     grid_h_px = cell_px * 3
 
@@ -209,24 +210,29 @@ def render_wc_grid(
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
+            font-weight: 800;
+            font-size: 18px;              /* bigger */
             color: #111827;
             writing-mode: vertical-rl;
             transform: rotate(180deg);
             user-select: none;
-            margin-right: -10px; /* pull label closer */
+            margin-right: -14px;          /* pull closer to tiles */
           }}
+
           .wc-x {{
             width: {grid_w_px}px;
+            display: block;
+            margin: 8px auto 0 auto;      /* centers the whole label under grid */
             text-align: center;
-            margin-top: 6px;
-            font-weight: 700;
+            font-weight: 800;
+            font-size: 18px;              /* bigger */
             color: #111827;
             user-select: none;
           }}
-          /* compact button so tile stays square */
+
+          /* Make the Select buttons compact so tiles look square */
           div[data-testid="stButton"] button {{
-            padding: 0.2rem 0.5rem !important;
+            padding: 0.15rem 0.45rem !important;
             font-weight: 700 !important;
           }}
         </style>
@@ -234,15 +240,17 @@ def render_wc_grid(
         unsafe_allow_html=True,
     )
 
-    # Make the left label column narrower + reduce gap
-    left, right = st.columns([0.05, 0.95], gap="xxsmall")
+    # Make label column *very* narrow + minimal gap
+    left, right = st.columns([0.03, 0.97], gap="xxsmall")
     with left:
         st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
 
     with right:
-        # Constrain the grid to a fixed width so it doesn't stretch (keeps Complexity centered)
-        grid_wrap, _ = st.columns([grid_w_px, 1], gap="xxsmall")
-        with grid_wrap:
+        # Keep the grid from stretching across the page by boxing it into a 3-col layout:
+        # left spacer | grid | right spacer
+        spacer_l, grid_col, spacer_r = st.columns([1, 0.0001, 1], gap="xxsmall")
+        with grid_col:
+            # Render tiles
             for rr in range(3):
                 cols = st.columns(3, gap="xxsmall")
                 for cc in range(3):
@@ -251,11 +259,12 @@ def render_wc_grid(
                         tile = st.container(border=True, height=cell_px)
                         with tile:
                             is_selected = idx == selected_idx
-                            btn_label = "Selected" if is_selected else "Select"
-                            if st.button(btn_label, key=f"{key}__tile__{idx}", use_container_width=True):
+                            label = "Selected" if is_selected else "Select"
+                            if st.button(label, key=f"{key}__tile__{idx}", use_container_width=True):
                                 st.session_state[key] = idx
                                 selected_idx = idx
 
+            # Bottom axis label, centered under tiles (not full page)
             st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
