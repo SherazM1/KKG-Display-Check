@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import html
 import streamlit.components.v1 as components
+from urllib.parse import urlencode
 import pandas as pd
 import streamlit as st
 from PIL import Image, ImageOps
@@ -185,19 +186,18 @@ def render_wc_grid(
     *,
     key: str = "wc_idx",
     size_px: int = 300,
-    default_rc: Tuple[int, int] = (2, 0),  # bottom-left
+    default_rc: Tuple[int, int] = (2, 0),
 ) -> Tuple[int, int]:
     """
-    Locked 3×3 grid rendered as HTML/CSS with JS navigation.
-    - Each tile has a small Select/Selected pill
-    - Click updates query param ?{key}=idx and reloads (Streamlit reruns)
-    - Selection stored in st.session_state[key]
+    Locked 3×3 grid rendered as HTML/CSS.
+    Clicks work by navigating the TOP page to ?{key}=idx (target=_top),
+    which triggers a Streamlit rerun. Single-select stored in session_state[key].
     """
     cell_px = max(64, min(110, int(size_px) // 3))
     grid_px = cell_px * 3
     default_idx = int(default_rc[0] * 3 + default_rc[1])
 
-    # Read query param into session state (supports both old/new Streamlit query APIs)
+    # --- Read current selection from query params (if present) ---
     idx_from_qp = None
     try:
         qp = st.query_params
@@ -215,88 +215,48 @@ def render_wc_grid(
     selected_idx = min(8, max(0, selected_idx))
     st.session_state[key] = selected_idx
 
-    # Preserve other query params when we navigate
-    preserved = []
+    # --- Preserve other query params when generating hrefs ---
+    params = {}
     try:
-        qp = st.query_params
-        items = qp.items()
+        for k, v in st.query_params.items():
+            if k == key:
+                continue
+            params[k] = v
     except Exception:
-        items = []
-    for k, v in items:
-        if k == key:
-            continue
-        vs = v if isinstance(v, list) else [v]
-        for item in vs:
-            preserved.append((str(k), str(item)))
+        pass
 
-    preserved_js = "[" + ",".join(
-        f'[{html.escape(repr(k))},{html.escape(repr(v))}]' for k, v in preserved
-    ) + "]"
+    def href_for(idx: int) -> str:
+        merged = dict(params)
+        merged[key] = str(idx)
+        return "?" + urlencode(merged, doseq=True)
 
-    aria_prefix = f"__wcgrid__{key}__"
-
-    buttons_html = []
+    # --- Build the 3×3 cells as <a> links that navigate the TOP page ---
+    cells_html = []
     for idx in range(9):
         is_selected = idx == selected_idx
         cls = "cell selected" if is_selected else "cell"
         pill = "Selected" if is_selected else "Select"
-        buttons_html.append(
+        href = html.escape(href_for(idx), quote=True)
+
+        cells_html.append(
             f"""
-            <button
-              type="button"
-              class="{cls}"
-              data-idx="{idx}"
-              aria-label="{html.escape(f"{aria_prefix}{idx}")}"
-            >
+            <a class="{cls}" href="{href}" target="_top" rel="noopener">
               <span class="pill">{pill}</span>
-            </button>
+            </a>
             """
         )
 
     html_block = f"""
     <div class="wc-wrap">
       <div class="grid">
-        {''.join(buttons_html)}
+        {''.join(cells_html)}
       </div>
     </div>
 
-    <script>
-      (function() {{
-        const KEY = {html.escape(repr(key))};
-        const preserved = {preserved_js};
-
-        function navigateWith(idx) {{
-          // Try parent/top first (iframe sandbox), fall back to self.
-          const targets = [window.top, window.parent, window];
-          for (const t of targets) {{
-            try {{
-              const url = new URL(t.location.href);
-              // Keep existing params, ensure ours is set
-              for (const [k,v] of preserved) {{
-                if (!url.searchParams.has(k)) url.searchParams.set(k, v);
-              }}
-              url.searchParams.set(KEY, String(idx));
-              t.location.href = url.toString();
-              return;
-            }} catch (e) {{
-              // continue
-            }}
-          }}
-        }}
-
-        document.querySelectorAll('.cell').forEach(btn => {{
-          btn.addEventListener('click', () => {{
-            const idx = btn.getAttribute('data-idx');
-            navigateWith(idx);
-          }});
-        }});
-      }})();
-    </script>
-
     <style>
       .wc-wrap {{
-        width: {grid_px + 24}px;
-        padding: 4px;
+        width: {grid_px + 40}px;   /* extra so nothing clips */
+        padding: 6px;
         overflow: visible;
       }}
 
@@ -308,7 +268,6 @@ def render_wc_grid(
       }}
 
       .cell {{
-        all: unset;
         box-sizing: border-box;
         border: 1px solid #d1d5db;
         border-radius: 12px;
@@ -319,6 +278,7 @@ def render_wc_grid(
         align-items: flex-start;
         justify-content: center;
         padding-top: 10px;
+        text-decoration: none;
         cursor: pointer;
       }}
 
@@ -354,16 +314,11 @@ def render_wc_grid(
     </style>
     """
 
-    # Give the iframe extra width so nothing clips on the right
-    components.html(
-        html_block,
-        height=grid_px + 60,
-        width=grid_px + 80,
-    )
+    # Give iframe plenty of room
+    components.html(html_block, height=grid_px + 80, width=grid_px + 120)
 
     r, c = divmod(selected_idx, 3)
     return int(r), int(c)
-
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
     """policy['matrix_markups'] must be a 3×3 list of decimals (e.g. 0.35)."""
