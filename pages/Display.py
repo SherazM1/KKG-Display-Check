@@ -187,28 +187,27 @@ def render_wc_grid(
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    3×3 tile grid using Streamlit containers (doc-style), each with a Select button.
+    3×3 tile grid using Streamlit containers (doc-style), each with a small Select button.
     Single active selection stored in st.session_state[key] as idx 0..8.
 
     Returns:
         (row, col)
     """
-    cell_px = max(90, int(size_px) // 3)
+    cell_px = max(64, int(size_px) // 4)  # smaller than before
     default_idx = int(default_rc[0] * 3 + default_rc[1])
 
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
 
-    # Optional: small styling for consistent tile padding + selected badge look
     st.markdown(
         """
         <style>
           .wc-badge {
             display:inline-block;
-            padding: 4px 10px;
+            padding: 3px 8px;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 12px;
+            font-size: 11px;
             border: 1px solid #11182722;
             background: #11182708;
           }
@@ -216,19 +215,39 @@ def render_wc_grid(
             border: 1px solid #111827;
             background: #e5e7eb;
           }
+          .wc-y {
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:700;
+            color:#111827;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            user-select:none;
+            padding: 0 6px;
+            height: 100%;
+          }
+          .wc-x {
+            text-align:center;
+            margin-top: 8px;
+            font-weight:700;
+            color:#111827;
+            user-select:none;
+          }
+          .wc-tile-pad div[data-testid="stVerticalBlockBorderWrapper"] {
+            padding: 8px !important;
+          }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown("#### Select Weight Tier and Complexity Level")
+    # Left label, grid, right spacer to keep grid from stretching (helps tiles look squarer)
+    label_col, grid_col, _spacer = st.columns([0.08, 0.32, 0.60], gap="small")
+    with label_col:
+        st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
 
-    # Keep axis labels simple and stable
-    left, right = st.columns([0.12, 0.88], gap="small")
-    with left:
-        st.markdown("**Weight**")
-    with right:
-        # Build 3 rows of 3 tiles
+    with grid_col:
         for rr in range(3):
             cols = st.columns(3, gap="small")
             for cc in range(3):
@@ -237,17 +256,21 @@ def render_wc_grid(
                     tile = st.container(border=True, height=cell_px)
 
                     with tile:
+                        st.markdown("<div class='wc-tile-pad'>", unsafe_allow_html=True)
+
                         is_selected = (idx == selected_idx)
                         badge_cls = "wc-badge on" if is_selected else "wc-badge"
                         badge_txt = "Selected" if is_selected else "Not selected"
                         st.markdown(f"<span class='{badge_cls}'>{badge_txt}</span>", unsafe_allow_html=True)
 
-                        st.write("")  # spacer
+                        st.write("")
                         if st.button("Select", key=f"{key}__tile__{idx}", use_container_width=True):
                             st.session_state[key] = idx
                             selected_idx = idx
 
-    st.markdown("**Complexity**")
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
 
     r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
     return int(r), int(c)
