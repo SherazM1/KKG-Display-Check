@@ -184,23 +184,102 @@ def render_wc_grid(
     *,
     key: str = "wc_idx",
     size_px: int = 420,
-    default_rc: Tuple[int, int] = (2, 0),  # bottom-left
+    default_rc: Tuple[int, int] = (2, 0),
 ) -> Tuple[int, int]:
     """
-    3×3 tile grid using Streamlit containers (stable), single-select.
-    - No header inside (caller controls headings)
-    - Weight label tight on the left
-    - Complexity centered directly under the grid (under tiles, not page)
-    - Smaller, square tiles (clamped even if caller passes big size_px)
+    Locked 3×3 grid ONLY (no Weight/Complexity labels).
+    - Fixed-size tiles (square)
+    - Small "Select" button in each tile
+    - Single active selection stored in st.session_state[key] as idx 0..8
     """
-    # Clamp so it stays compact even if caller passes 420+
     cell_px = int(min(110, max(78, size_px // 3)))
     grid_w_px = cell_px * 3
-    grid_h_px = cell_px * 3
 
     default_idx = int(default_rc[0] * 3 + default_rc[1])
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
+
+    aria_prefix = f"__wcgrid__{key}__"
+    selected_aria = f"{aria_prefix}{selected_idx}"
+
+    st.markdown(
+        f"""
+        <style>
+          /* Lock each 3-col row that contains our grid buttons to its natural width */
+          div[data-testid="stHorizontalBlock"]:has(button[aria-label^="{aria_prefix}"]) {{
+            width: fit-content !important;
+            justify-content: flex-start !important;
+          }}
+
+          /* Remove gaps/padding between the 3 columns (grid rows) */
+          div[data-testid="stHorizontalBlock"]:has(button[aria-label^="{aria_prefix}"]) {{
+            gap: 0.25rem !important;
+          }}
+          div[data-testid="stHorizontalBlock"]:has(button[aria-label^="{aria_prefix}"]) div[data-testid="column"] {{
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }}
+
+          /* Keep tiles visually square and compact */
+          div[data-testid="stVerticalBlockBorderWrapper"] {{
+            border-radius: 10px !important;
+          }}
+
+          /* Make the button small + consistent, and force it to display "Select/Selected" */
+          button[aria-label^="{aria_prefix}"] {{
+            padding: 0.15rem 0.5rem !important;
+            font-weight: 700 !important;
+          }}
+          button[aria-label^="{aria_prefix}"] * {{
+            display: none !important;
+          }}
+          button[aria-label^="{aria_prefix}"]::after {{
+            content: "Select";
+            font-size: 12px;
+            line-height: 1;
+          }}
+          button[aria-label="{selected_aria}"]::after {{
+            content: "Selected";
+          }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Grid wrapper: constrain to ~grid width using a big right spacer (ratio-based but stable)
+    grid_col, _ = st.columns([grid_w_px, 5000], gap="xxsmall")
+    with grid_col:
+        for rr in range(3):
+            cols = st.columns(3, gap="xxsmall")
+            for cc in range(3):
+                idx = rr * 3 + cc
+                with cols[cc]:
+                    tile = st.container(border=True, height=cell_px)
+                    with tile:
+                        aria_label = f"{aria_prefix}{idx}"
+                        if st.button(aria_label, key=f"{key}__tile__{idx}", use_container_width=True):
+                            st.session_state[key] = idx
+                            selected_idx = idx
+
+    r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
+    return int(r), int(c)
+
+
+def render_wc_axes(
+    *,
+    key: str = "wc_idx",
+    size_px: int = 420,
+    default_rc: Tuple[int, int] = (2, 0),
+    y_label: str = "Weight",
+    x_label: str = "Complexity",
+) -> Tuple[int, int]:
+    """
+    Frontend-only wrapper that places axis labels around the locked grid.
+    Does not change grid internals.
+    """
+    cell_px = int(min(110, max(78, size_px // 3)))
+    grid_w_px = cell_px * 3
+    grid_h_px = cell_px * 3
 
     st.markdown(
         f"""
@@ -211,65 +290,36 @@ def render_wc_grid(
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            font-size: 18px;              /* bigger */
+            font-size: 20px;
             color: #111827;
             writing-mode: vertical-rl;
             transform: rotate(180deg);
             user-select: none;
-            margin-right: -14px;          /* pull closer to tiles */
+            margin-right: -8px;
           }}
-
           .wc-x {{
             width: {grid_w_px}px;
-            display: block;
-            margin: 8px auto 0 auto;      /* centers the whole label under grid */
+            margin: 8px 0 0 0;
             text-align: center;
             font-weight: 800;
-            font-size: 18px;              /* bigger */
+            font-size: 20px;
             color: #111827;
             user-select: none;
-          }}
-
-          /* Make the Select buttons compact so tiles look square */
-          div[data-testid="stButton"] button {{
-            padding: 0.15rem 0.45rem !important;
-            font-weight: 700 !important;
           }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Make label column *very* narrow + minimal gap
-    left, right = st.columns([0.03, 0.97], gap="xxsmall")
+    left, right = st.columns([0.05, 0.95], gap="xxsmall")
     with left:
-        st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='wc-y'>{y_label}</div>", unsafe_allow_html=True)
 
     with right:
-        # Keep the grid from stretching across the page by boxing it into a 3-col layout:
-        # left spacer | grid | right spacer
-        spacer_l, grid_col, spacer_r = st.columns([1, 0.0001, 1], gap="xxsmall")
-        with grid_col:
-            # Render tiles
-            for rr in range(3):
-                cols = st.columns(3, gap="xxsmall")
-                for cc in range(3):
-                    idx = rr * 3 + cc
-                    with cols[cc]:
-                        tile = st.container(border=True, height=cell_px)
-                        with tile:
-                            is_selected = idx == selected_idx
-                            label = "Selected" if is_selected else "Select"
-                            if st.button(label, key=f"{key}__tile__{idx}", use_container_width=True):
-                                st.session_state[key] = idx
-                                selected_idx = idx
+        rc = render_wc_grid(key=key, size_px=size_px, default_rc=default_rc)
+        st.markdown(f"<div class='wc-x'>{x_label}</div>", unsafe_allow_html=True)
 
-            # Bottom axis label, centered under tiles (not full page)
-            st.markdown("<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
-
-    r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
-    return int(r), int(c)
-
+    return rc
 
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
