@@ -457,9 +457,14 @@ def render_pdq_form() -> None:
     with left:
         st.markdown("#### Totals")
         st.write(f"Selected tier: **{selected_label}**")
-        st.write(f"Final per-unit price (after everything): **${final_per_unit:,.2f}**")
-        st.write(f"Program total (after markup): **${final_total:,.2f}**")
-        st.write(f"Program total range (25%–45% markup): **${min_total:,.2f} – ${max_total:,.2f}**")
+        st.write(f"Per-unit price: **${final_per_unit:,.2f}**")
+        st.write(f"Program total: **${final_total:,.2f}**")
+        st.write(f"Program total range: **${min_total:,.2f} – ${max_total:,.2f}**")
+        min_col, max_col = st.columns(2, gap="small")
+    with min_col:
+        st.metric("Min (25%)", f"${min_total:,.2f}")
+    with max_col:
+        st.metric("Max (45%)", f"${max_total:,.2f}")
 
     with right:
         st.empty()
