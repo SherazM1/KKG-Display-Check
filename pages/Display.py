@@ -184,20 +184,18 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 def render_wc_grid(
     *,
     key: str = "wc_idx",
-    size_px: int = 420,
+    size_px: int = 300,
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
     gap: str = "xxsmall",
 ) -> Tuple[int, int]:
     """
     3×3 tile grid (pure Streamlit, reliable buttons) with fixed labels in exact positions.
+    No internal scroll: tiles auto-size (no fixed height).
 
     Labels (top->bottom, left->right):
       Heavy | Moderate/Heavy | Complex/Heavy
       Medium | Moderate/Medium | Complex/Medium
       Light | Moderate | Complex
-
-    Single active selection stored in st.session_state[key] as idx 0..8.
-    Returns (row, col).
     """
     labels = [
         ["Heavy", "Moderate/Heavy", "Complex/Heavy"],
@@ -205,9 +203,8 @@ def render_wc_grid(
         ["Light", "Moderate", "Complex"],
     ]
 
-    # Scale down vs prior versions; clamp so it stays compact even if caller passes 420+
-    # This yields ~96–104px tiles for typical inputs, which fits label + button w/o scroll.
-    cell_px = int(min(104, max(92, size_px // 4)))
+    # Control "visual size" primarily via tile width; height will follow content (no scroll).
+    cell_px = int(min(110, max(88, size_px // 3)))
 
     default_idx = int(default_rc[0] * 3 + default_rc[1])
     selected_idx = int(st.session_state.get(key, default_idx))
@@ -217,33 +214,35 @@ def render_wc_grid(
     st.markdown(
         f"""
         <style>
-          /* Compact buttons so tile never needs scrolling */
+          /* Make each column feel like a square tile by constraining width */
+          div[data-testid="column"] {{
+            min-width: {cell_px}px !important;
+          }}
+
+          /* Compact button everywhere in this section (Streamlit doesn't allow per-button CSS cleanly) */
           div[data-testid="stButton"] button {{
             padding: 0.18rem 0.45rem !important;
             font-weight: 700 !important;
             border-radius: 10px !important;
           }}
 
-          /* Label styling inside tiles */
           .wc-cell-label {{
             font-weight: 800;
-            font-size: 13px;
-            line-height: 1.05;
+            font-size: 15px;     /* bigger, since we removed forced height */
+            line-height: 1.1;
             text-align: center;
             color: #111827;
             user-select: none;
-            margin-top: 2px;
-            margin-bottom: 0px;
+            margin: 2px 0 8px 0;
             white-space: normal;
-            overflow-wrap: anywhere; /* allows Moderate/Medium etc to wrap if needed */
+            overflow-wrap: anywhere;
           }}
 
-          /* Small selection indicator bar */
           .wc-ind {{
             height: 6px;
             width: 100%;
             border-radius: 999px;
-            margin: 2px 0 8px 0;
+            margin: 2px 0 10px 0;
           }}
         </style>
         """,
@@ -257,20 +256,14 @@ def render_wc_grid(
             is_selected = idx == selected_idx
 
             with cols[c]:
-                tile = st.container(border=True, height=cell_px)
+                # IMPORTANT: no fixed height => no internal scroll
+                tile = st.container(border=True)
                 with tile:
                     st.markdown(
                         f"<div class='wc-ind' style='background:{'#111827' if is_selected else '#e5e7eb'};'></div>",
                         unsafe_allow_html=True,
                     )
-
-                    # exact text, but allow wrapping if needed (no scroll)
                     st.markdown(f"<div class='wc-cell-label'>{labels[r][c]}</div>", unsafe_allow_html=True)
-
-                    # spacer tuned so label + button fit into the fixed height
-                    # (keeps everything visible, no internal scroll)
-                    spacer_h = max(4, cell_px - 72)
-                    st.markdown(f"<div style='height:{spacer_h}px;'></div>", unsafe_allow_html=True)
 
                     btn_text = "Selected" if is_selected else "Select"
                     if st.button(btn_text, key=f"{key}__{idx}", use_container_width=True):
