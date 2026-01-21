@@ -9,7 +9,8 @@ import os
 import textwrap
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-
+import html
+import streamlit.components.v1 as components
 import pandas as pd
 import streamlit as st
 from PIL import Image, ImageOps
@@ -183,143 +184,140 @@ def _resolve_parts_per_unit(catalog: Dict, form: Dict) -> List[Tuple[str, int]]:
 def render_wc_grid(
     *,
     key: str = "wc_idx",
-    size_px: int = 420,
-    default_rc: Tuple[int, int] = (2, 0),
+    size_px: int = 300,
+    default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    Locked 3×3 grid ONLY (no Weight/Complexity labels).
-    - Fixed-size tiles (square)
-    - Small "Select" button in each tile
-    - Single active selection stored in st.session_state[key] as idx 0..8
+    Locked 3×3 grid that always renders correctly:
+    - Pure HTML/CSS grid (square tiles)
+    - Each tile has a small Select button
+    - Click submits ?{key}=idx (GET) -> Streamlit rerun
+    - Selection stored in st.session_state[key] (single active)
+    - Returns (row, col)
+
+    This avoids Streamlit column sizing/DOM/CSS fragility entirely.
     """
-    cell_px = int(min(110, max(78, size_px // 3)))
-    grid_w_px = cell_px * 3
+    cell_px = max(64, min(110, int(size_px) // 3))
+    grid_px = cell_px * 3
 
     default_idx = int(default_rc[0] * 3 + default_rc[1])
+
+    # 1) Pull selection from query params (if present), otherwise session_state/default
+    qp = st.query_params  # dict-like
+    idx_from_qp = None
+    if key in qp:
+        try:
+            raw = qp.get(key)
+            raw_val = raw[0] if isinstance(raw, list) else raw
+            idx_from_qp = int(raw_val)
+        except Exception:
+            idx_from_qp = None
+
+    if idx_from_qp is not None and 0 <= idx_from_qp <= 8:
+        st.session_state[key] = idx_from_qp
+
     selected_idx = int(st.session_state.get(key, default_idx))
     selected_idx = min(8, max(0, selected_idx))
+    st.session_state[key] = selected_idx
 
-    aria_prefix = f"__wcgrid__{key}__"
-    selected_aria = f"{aria_prefix}{selected_idx}"
+    # 2) Preserve other query params on submit (so we don't wipe unrelated params)
+    hidden_inputs = []
+    for k, v in qp.items():
+        if k == key:
+            continue
+        vs = v if isinstance(v, list) else [v]
+        for item in vs:
+            hidden_inputs.append(
+                f'<input type="hidden" name="{html.escape(str(k))}" value="{html.escape(str(item))}"/>'
+            )
+    hidden_inputs_html = "\n".join(hidden_inputs)
 
-    st.markdown(
-        f"""
-        <style>
-          /* Lock each 3-col row that contains our grid buttons to its natural width */
-          div[data-testid="stHorizontalBlock"]:has(button[aria-label^="{aria_prefix}"]) {{
-            width: fit-content !important;
-            justify-content: flex-start !important;
-          }}
+    # 3) Build the 3×3 buttons
+    btns = []
+    for idx in range(9):
+        is_selected = idx == selected_idx
+        label = "Selected" if is_selected else "Select"
+        cls = "cell selected" if is_selected else "cell"
+        btns.append(
+            f"""
+            <button class="{cls}" type="submit" name="{html.escape(key)}" value="{idx}">
+              <span class="btn">{label}</span>
+            </button>
+            """
+        )
+    btns_html = "\n".join(btns)
 
-          /* Remove gaps/padding between the 3 columns (grid rows) */
-          div[data-testid="stHorizontalBlock"]:has(button[aria-label^="{aria_prefix}"]) {{
-            gap: 0.25rem !important;
-          }}
-          div[data-testid="stHorizontalBlock"]:has(button[aria-label^="{aria_prefix}"]) div[data-testid="column"] {{
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-          }}
+    # 4) Render
+    html_block = f"""
+    <div class="wc-wrap" style="width:{grid_px}px">
+      <form method="get" action="">
+        {hidden_inputs_html}
+        <div class="grid">
+          {btns_html}
+        </div>
+      </form>
+    </div>
 
-          /* Keep tiles visually square and compact */
-          div[data-testid="stVerticalBlockBorderWrapper"] {{
-            border-radius: 10px !important;
-          }}
+    <style>
+      .wc-wrap {{ margin: 0; padding: 0; }}
 
-          /* Make the button small + consistent, and force it to display "Select/Selected" */
-          button[aria-label^="{aria_prefix}"] {{
-            padding: 0.15rem 0.5rem !important;
-            font-weight: 700 !important;
-          }}
-          button[aria-label^="{aria_prefix}"] * {{
-            display: none !important;
-          }}
-          button[aria-label^="{aria_prefix}"]::after {{
-            content: "Select";
-            font-size: 12px;
-            line-height: 1;
-          }}
-          button[aria-label="{selected_aria}"]::after {{
-            content: "Selected";
-          }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+      .grid {{
+        display: grid;
+        grid-template-columns: repeat(3, {cell_px}px);
+        grid-template-rows: repeat(3, {cell_px}px);
+        gap: 10px;
+      }}
 
-    # Grid wrapper: constrain to ~grid width using a big right spacer (ratio-based but stable)
-    grid_col, _ = st.columns([grid_w_px, 5000], gap="xxsmall")
-    with grid_col:
-        for rr in range(3):
-            cols = st.columns(3, gap="xxsmall")
-            for cc in range(3):
-                idx = rr * 3 + cc
-                with cols[cc]:
-                    tile = st.container(border=True, height=cell_px)
-                    with tile:
-                        aria_label = f"{aria_prefix}{idx}"
-                        if st.button(aria_label, key=f"{key}__tile__{idx}", use_container_width=True):
-                            st.session_state[key] = idx
-                            selected_idx = idx
+      .cell {{
+        all: unset;
+        box-sizing: border-box;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        background: #ffffff;
+        width: {cell_px}px;
+        height: {cell_px}px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 10px;
+        cursor: pointer;
+      }}
 
-    r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
+      .cell:hover {{
+        background: #f9fafb;
+        border-color: #9ca3af;
+      }}
+
+      .cell.selected {{
+        background: #eef2ff;
+        border-color: #111827;
+        box-shadow: inset 0 0 0 1px #111827;
+      }}
+
+      .btn {{
+        display: inline-block;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 6px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #111827;
+        line-height: 1;
+      }}
+
+      .cell.selected .btn {{
+        border-color: #111827;
+        background: #e5e7eb;
+      }}
+    </style>
+    """
+
+    components.html(html_block, height=grid_px + 24, width=grid_px + 24)
+
+    r, c = divmod(selected_idx, 3)
     return int(r), int(c)
-
-
-def render_wc_axes(
-    *,
-    key: str = "wc_idx",
-    size_px: int = 420,
-    default_rc: Tuple[int, int] = (2, 0),
-    y_label: str = "Weight",
-    x_label: str = "Complexity",
-) -> Tuple[int, int]:
-    """
-    Frontend-only wrapper that places axis labels around the locked grid.
-    Does not change grid internals.
-    """
-    cell_px = int(min(110, max(78, size_px // 3)))
-    grid_w_px = cell_px * 3
-    grid_h_px = cell_px * 3
-
-    st.markdown(
-        f"""
-        <style>
-          .wc-y {{
-            height: {grid_h_px}px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 20px;
-            color: #111827;
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
-            user-select: none;
-            margin-right: -8px;
-          }}
-          .wc-x {{
-            width: {grid_w_px}px;
-            margin: 8px 0 0 0;
-            text-align: center;
-            font-weight: 800;
-            font-size: 20px;
-            color: #111827;
-            user-select: none;
-          }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    left, right = st.columns([0.05, 0.95], gap="xxsmall")
-    with left:
-        st.markdown(f"<div class='wc-y'>{y_label}</div>", unsafe_allow_html=True)
-
-    with right:
-        rc = render_wc_grid(key=key, size_px=size_px, default_rc=default_rc)
-        st.markdown(f"<div class='wc-x'>{x_label}</div>", unsafe_allow_html=True)
-
-    return rc
 
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
