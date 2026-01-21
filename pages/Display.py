@@ -1,8 +1,11 @@
 # pages/Display.py
 # Catalog-driven PDQ UI + rule resolution + preview (includes footprint base; float weight input)
+
 from __future__ import annotations
+
 import json
 import os
+import textwrap
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -12,87 +15,90 @@ from PIL import Image, ImageOps
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
+
 st.markdown(
-    """
-    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-      html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-      .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
-      .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
-      .kkg-table th, .kkg-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
-      .kkg-table th { text-align:left; color:#475569; font-weight:600; }
-      .muted { color:#6b7280; }
-      .pill { display:inline-block; padding:2px 8px; border:1px solid #e5e7eb; border-radius:999px; font-size:12px; margin-left:6px; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    textwrap.dedent(
+        """
+        <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+          html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
+          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
+          .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
+          .kkg-table th, .kkg-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
+          .kkg-table th { text-align:left; color:#475569; font-weight:600; }
+          .muted { color:#6b7280; }
+          .pill { display:inline-block; padding:2px 8px; border:1px solid #e5e7eb; border-radius:999px; font-size:12px; margin-left:6px; }
+          .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
 
-      /* ---- Sketch-style 3x3 matrix (one square, 9 cells) ---- */
-      .sk-wrap { display:flex; align-items:stretch; gap:14px; margin:8px 0 6px; }
-      .sk-ylabel {
-        display:flex; align-items:center; justify-content:center;
-        font-weight:700; color:#111827;
-        writing-mode: vertical-rl; transform: rotate(180deg);
-        user-select:none;
-        padding: 0 6px;
-      }
-      .sk-matrix-col { display:flex; flex-direction:column; align-items:flex-start; }
-      .sk-square {
-        width: 420px; max-width: 100%;
-        aspect-ratio: 1 / 1;
-        border: 2px solid #111827;
-        border-radius: 0px; /* sketch vibe = sharp corners */
-        background:#fff;
-        overflow:hidden;
-      }
-      .sk-grid {
-        display:grid;
-        grid-template-columns: repeat(3, 1fr);
-        grid-template-rows: repeat(3, 1fr);
-        width: 100%;
-        height: 100%;
-      }
-      .sk-cell {
-        border-right: 2px solid #111827;
-        border-bottom: 2px solid #111827;
-        background:#ffffff;
-        display:flex;
-        align-items:flex-end;      /* percentages sit near bottom like your sketch */
-        justify-content:flex-start;
-        padding: 10px 12px;
-        box-sizing:border-box;
-        font-weight:700;
-        color:#1f2937;
-      }
-      .sk-cell.edge-right { border-right: none; }
-      .sk-cell.edge-bottom { border-bottom: none; }
+          /* ---- Sketch-style 3x3 matrix (one square, 9 cells) ---- */
+          .sk-wrap { display:flex; align-items:stretch; gap:14px; margin:8px 0 6px; }
+          .sk-ylabel {
+            display:flex; align-items:center; justify-content:center;
+            font-weight:700; color:#111827;
+            writing-mode: vertical-rl; transform: rotate(180deg);
+            user-select:none;
+            padding: 0 6px;
+          }
+          .sk-matrix-col { display:flex; flex-direction:column; align-items:flex-start; }
+          .sk-square {
+            width: 420px; max-width: 100%;
+            aspect-ratio: 1 / 1;
+            border: 2px solid #111827;
+            border-radius: 0px; /* sketch vibe = sharp corners */
+            background:#fff;
+            overflow:hidden;
+          }
+          .sk-grid {
+            display:grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100%;
+            height: 100%;
+          }
+          .sk-cell {
+            border-right: 2px solid #111827;
+            border-bottom: 2px solid #111827;
+            background:#ffffff;
+            display:flex;
+            align-items:flex-end;      /* percentages sit near bottom like your sketch */
+            justify-content:flex-start;
+            padding: 10px 12px;
+            box-sizing:border-box;
+            font-weight:700;
+            color:#1f2937;
+          }
+          .sk-cell.edge-right { border-right: none; }
+          .sk-cell.edge-bottom { border-bottom: none; }
 
-      .sk-cell.selected {
-        background:#e5e7eb;
-        outline: 2px solid #111827;
-        outline-offset: -2px;
-      }
+          .sk-cell.selected {
+            background:#e5e7eb;
+            outline: 2px solid #111827;
+            outline-offset: -2px;
+          }
 
-      .sk-xlabel {
-        width: 420px; max-width: 100%;
-        text-align:center;
-        margin-top:10px;
-        font-weight:700;
-        color:#111827;
-        user-select:none;
-      }
+          .sk-xlabel {
+            width: 420px; max-width: 100%;
+            text-align:center;
+            margin-top:10px;
+            font-weight:700;
+            color:#111827;
+            user-select:none;
+          }
 
-      /* Streamlit button normalization inside our grid columns */
-      .sk-btn-holder div[data-testid="stButton"] > button {
-        width: 100% !important;
-        height: 100% !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        border: none !important;
-        background: transparent !important;
-        border-radius: 0 !important;
-      }
-      .sk-btn-holder div[data-testid="stButton"] { height: 100%; }
-    </style>
-    """,
+          /* Streamlit button normalization inside our grid columns */
+          .sk-btn-holder div[data-testid="stButton"] > button {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            border-radius: 0 !important;
+          }
+          .sk-btn-holder div[data-testid="stButton"] { height: 100%; }
+        </style>
+        """
+    ),
     unsafe_allow_html=True,
 )
 
@@ -121,6 +127,7 @@ def load_catalog(path: str) -> Dict:
         st.error(f"Failed to parse `{path}`: {e}")
         st.stop()
 
+
 @dataclass
 class OptionTile:
     key: str
@@ -128,11 +135,13 @@ class OptionTile:
     path: str
     category: str
 
+
 def _prettify(stem: str) -> str:
     if stem in LABEL_OVERRIDES:
         return LABEL_OVERRIDES[stem]
     s = stem.replace("_", " ").replace("-", " ").strip()
     return " ".join(w.capitalize() for w in s.split())
+
 
 def scan_pngs() -> List[OptionTile]:
     opts: List[OptionTile] = []
@@ -156,11 +165,13 @@ def scan_pngs() -> List[OptionTile]:
             opts.append(OptionTile(key=f"{cat}/{stem}", label=_prettify(stem), path=path, category=cat))
     return opts
 
+
 def _find_control(catalog: Dict, control_id: str) -> Optional[Dict]:
     for c in catalog.get("controls", []):
         if c.get("id") == control_id:
             return c
     return None
+
 
 def _footprint_dims(catalog: Dict, footprint_key: str) -> Tuple[Optional[int], Optional[int]]:
     fp = _find_control(catalog, "footprint")
@@ -172,11 +183,13 @@ def _footprint_dims(catalog: Dict, footprint_key: str) -> Tuple[Optional[int], O
             return dims.get("width_in"), dims.get("depth_in")
     return None, None
 
+
 def _parts_value(catalog: Dict, part_key: str) -> float:
     try:
         return float(catalog.get("parts", {}).get(part_key, {}).get("base_value", 0) or 0)
     except Exception:
         return 0.0
+
 
 def _round_display_weight(total_lbs: float, policy: Dict) -> str:
     step = policy.get("display_weight_round", 0.01)
@@ -189,8 +202,10 @@ def _round_display_weight(total_lbs: float, policy: Dict) -> str:
     fmt = f"{{:.{decimals}f}}"
     return fmt.format(total_lbs)
 
+
 def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
-    return [lst[i:i+n] for i in range(0, len(lst), n)]
+    return [lst[i : i + n] for i in range(0, len(lst), n)]
+
 
 def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
     """
@@ -203,6 +218,7 @@ def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image
     contained = ImageOps.contain(img, (target_w, target_h))
     padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
     return padded.convert("RGB")
+
 
 def render_weight_complexity_sketch_matrix(
     key: str = "selected_grid",
@@ -221,18 +237,13 @@ def render_weight_complexity_sketch_matrix(
 
     r_sel, c_sel = st.session_state[key]
 
-    # Layout: [Weight label] [Square + Complexity label]
     left_col, right_col = st.columns([0.10, 0.90], gap="small")
 
     with left_col:
         st.markdown("<div class='sk-ylabel'>Weight</div>", unsafe_allow_html=True)
 
     with right_col:
-        # The square (HTML), but the clicks come from Streamlit buttons laid on top cell-by-cell.
         st.markdown("<div class='sk-matrix-col'>", unsafe_allow_html=True)
-
-        # Build a 3x3 grid using Streamlit columns for click targets,
-        # while drawing the actual square using HTML below each cell.
         st.markdown("<div class='sk-square'><div class='sk-grid'>", unsafe_allow_html=True)
 
         for r in range(3):
@@ -250,25 +261,21 @@ def render_weight_complexity_sketch_matrix(
                     classes.append("selected")
                 cls = " ".join(classes)
 
-                # Only bottom row gets the % labels, like your sketch
-                cell_text = ""
-                if r == 2:
-                    cell_text = bottom_row_labels[c]
+                cell_text = bottom_row_labels[c] if r == 2 else ""
 
                 with cols[c]:
                     st.markdown("<div class='sk-btn-holder'>", unsafe_allow_html=True)
                     if st.button(" ", key=f"sk_cell_{r}_{c}", use_container_width=True):
                         st.session_state[key] = (r, c)
                     st.markdown("</div>", unsafe_allow_html=True)
-
-                    # Draw the visible cell under the click target
                     st.markdown(f"<div class='{cls}'>{cell_text}</div>", unsafe_allow_html=True)
 
-        st.markdown("</div></div>", unsafe_allow_html=True)  # end square/grid
+        st.markdown("</div></div>", unsafe_allow_html=True)
         st.markdown("<div class='sk-xlabel'>Complexity</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     return st.session_state[key]
+
 
 # ---------- Page header ----------
 st.markdown("## Select the type of display")
@@ -282,10 +289,9 @@ if not tiles:
         "(e.g., `assets/references/pdq/digital_pdq_tray.png`)."
     )
 else:
-    # force 2-per-row so PDQ + DUMP BIN sit together cleanly
     per_row = 2
     for row in _chunk(tiles, per_row):
-        cols = st.columns(len(row), gap="large")  # IMPORTANT: no empty columns -> no blank boxes
+        cols = st.columns(len(row), gap="large")
         for c, t in zip(cols, row):
             with c:
                 st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
@@ -297,6 +303,7 @@ else:
                 st.markdown("</div>", unsafe_allow_html=True)
 
 selected_key: Optional[str] = st.session_state.get("selected_display_key")
+
 
 # ---------- PDQ FORM (catalog-driven) ----------
 def render_pdq_form():
@@ -315,7 +322,6 @@ def render_pdq_form():
         label = ctrl.get("label")
         key = f"pdq__{cid}"
 
-        # Skip removed controls
         if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
             continue
 
@@ -349,7 +355,6 @@ def render_pdq_form():
                 default = int(saved) if saved is not None else (max(1, min_v) if cid == "quantity" else int(min_v))
                 val = st.number_input(label, min_value=int(min_v), step=1, value=int(default), key=key)
                 st.session_state.form[cid] = int(val)
-
             else:
                 default = float(saved) if saved is not None else float(min_v)
                 val = st.number_input(label, min_value=float(min_v), step=0.01, value=float(default), key=key)
@@ -357,20 +362,21 @@ def render_pdq_form():
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
-    # ---- Replacement UI: EXACT sketch-style matrix ----
     st.markdown("#### Select Weight Tier and Complexity Level")
 
-    # bottom-row numbers like your sketch
     bottom_row = ("25%", "35%", "45%")
     selected_rc = render_weight_complexity_sketch_matrix(key="selected_grid_rc", bottom_row_labels=bottom_row)
 
-    # Placeholder factors (eventually read from catalog["policy"]["grid_factors"])
-    # Map (row, col) -> multiplier. You can adjust these later to match your real policy.
-    # Row = weight tier (top to bottom), Col = complexity (left to right)
     grid_factor_by_rc = {
-        (0, 0): 1.00, (0, 1): 1.05, (0, 2): 1.10,
-        (1, 0): 1.05, (1, 1): 1.10, (1, 2): 1.15,
-        (2, 0): 1.10, (2, 1): 1.15, (2, 2): 1.20,
+        (0, 0): 1.00,
+        (0, 1): 1.05,
+        (0, 2): 1.10,
+        (1, 0): 1.05,
+        (1, 1): 1.10,
+        (1, 2): 1.15,
+        (2, 0): 1.10,
+        (2, 1): 1.15,
+        (2, 2): 1.20,
     }
 
     form = st.session_state.form
@@ -483,7 +489,11 @@ def render_pdq_form():
         st.write(f"Program base (before markup): **${program_base:,.2f}**")
         st.write(f"Final price (after markup): **${final_total:,.2f}**")
 
-    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
+        unsafe_allow_html=True,
+    )
+
 
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
