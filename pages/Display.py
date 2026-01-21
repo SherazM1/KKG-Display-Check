@@ -187,111 +187,94 @@ def render_wc_grid(
     default_rc: Tuple[int, int] = (2, 0),  # bottom-left
 ) -> Tuple[int, int]:
     """
-    Streamlit-safe 3×3 clickable square grid:
-    - Uses ONE st.radio (so clicks always rerun + update totals)
-    - CSS forces the radio group into a perfect 3×3 grid
-    - Cells are blank, selected cell highlights
-    - Left-aligned
+    Render a reliable 3×3 clickable grid (single-select) using Streamlit buttons.
+
+    Returns:
+        (row, col) with row/col in [0..2].
+
+    Notes:
+        - Single active cell at a time (stored in st.session_state[key] as idx 0..8).
+        - Uses button labels only for accessibility; text is visually hidden.
+        - Styling is scoped via aria-label prefix so it won't affect other buttons.
     """
-    cell_px = size_px // 3
-    default_idx = default_rc[0] * 3 + default_rc[1]
+    cell_px = max(40, int(size_px) // 3)
+    size_px = cell_px * 3
 
-    # Marker + scoped CSS that reliably hits the next stRadio block within this container
+    default_idx = int(default_rc[0] * 3 + default_rc[1])
+    selected_idx = int(st.session_state.get(key, default_idx))
+    selected_idx = min(8, max(0, selected_idx))
+
+    aria_prefix = f"__wcgrid__{key}__"
+    selected_aria = f"{aria_prefix}{selected_idx}"
+
     st.markdown(
-        textwrap.dedent(
-            f"""
-            <style>
-              /* Scope everything to elements AFTER this marker (within same container block) */
-              #wc-grid-scope {{ display:none; }}
+        f"""
+        <style>
+          /* Scope: only buttons whose aria-label starts with our unique prefix */
+          button[aria-label^="{aria_prefix}"] {{
+            width: {cell_px}px !important;
+            height: {cell_px}px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            border: 2px solid #111827 !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            font-size: 0 !important; /* hide label text visually */
+            line-height: 0 !important;
+          }}
 
-              /* Make the radiogroup a 3×3 square */
-              #wc-grid-scope ~ div div[data-testid="stRadio"] [role="radiogroup"] {{
-                display: grid !important;
-                grid-template-columns: repeat(3, {cell_px}px) !important;
-                grid-auto-rows: {cell_px}px !important;
-                gap: 0 !important;
-                width: {size_px}px !important;
-                height: {size_px}px !important;
-                border: 2px solid #111827 !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                box-sizing: border-box !important;
-              }}
+          button[aria-label^="{aria_prefix}"]:hover {{
+            background: #f3f4f6 !important;
+          }}
 
-              /* Each option becomes a cell */
-              #wc-grid-scope ~ div div[data-testid="stRadio"] label {{
-                margin: 0 !important;
-                padding: 0 !important;
-                width: {cell_px}px !important;
-                height: {cell_px}px !important;
-                border-right: 2px solid #111827 !important;
-                border-bottom: 2px solid #111827 !important;
-                background: #ffffff !important;
-                box-sizing: border-box !important;
-                display: block !important;
-                cursor: pointer !important;
-                user-select: none !important;
-                position: relative !important;
-              }}
+          /* Selected state (reliable: no :has()) */
+          button[aria-label="{selected_aria}"] {{
+            background: #e5e7eb !important;
+            outline: 2px solid #111827 !important;
+            outline-offset: -2px !important;
+          }}
 
-              /* Remove inner borders at right edge and bottom edge */
-              #wc-grid-scope ~ div div[data-testid="stRadio"] label:nth-child(3n) {{
-                border-right: none !important;
-              }}
-              #wc-grid-scope ~ div div[data-testid="stRadio"] label:nth-last-child(-n+3) {{
-                border-bottom: none !important;
-              }}
+          /* Make buttons feel like tiles */
+          button[aria-label^="{aria_prefix}"]:focus {{
+            outline: 2px solid #111827 !important;
+            outline-offset: -2px !important;
+          }}
 
-              /* Hide the default radio circle + any text */
-              #wc-grid-scope ~ div div[data-testid="stRadio"] input[type="radio"] {{
-                opacity: 0 !important;
-                position: absolute !important;
-                inset: 0 !important;
-                margin: 0 !important;
-              }}
-              #wc-grid-scope ~ div div[data-testid="stRadio"] label span {{
-                display: none !important;
-              }}
+          /* Axis labels */
+          .wc-axis-wrap {{
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin: 8px 0 6px;
+          }}
+          .wc-y {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #111827;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            user-select: none;
+            padding: 0 6px;
+          }}
+          .wc-x {{
+            width: {size_px}px;
+            text-align: center;
+            margin-top: 10px;
+            font-weight: 700;
+            color: #111827;
+            user-select: none;
+          }}
 
-              /* Hover + selected */
-              #wc-grid-scope ~ div div[data-testid="stRadio"] label:hover {{
-                background: #f3f4f6 !important;
-              }}
-              #wc-grid-scope ~ div div[data-testid="stRadio"] label:has(input[type="radio"]:checked) {{
-                background: #e5e7eb !important;
-                outline: 2px solid #111827 !important;
-                outline-offset: -2px !important;
-              }}
-
-              /* Axis labels */
-              .wc-axis-wrap {{
-                display:flex;
-                align-items:stretch;
-                gap: 14px;
-                margin: 8px 0 6px;
-              }}
-              .wc-y {{
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                font-weight:700;
-                color:#111827;
-                writing-mode: vertical-rl;
-                transform: rotate(180deg);
-                user-select:none;
-                padding: 0 6px;
-              }}
-              .wc-x {{
-                width: {size_px}px;
-                text-align:center;
-                margin-top: 10px;
-                font-weight:700;
-                color:#111827;
-                user-select:none;
-              }}
-            </style>
-            """
-        ),
+          /* Tighten Streamlit button containers inside columns */
+          div[data-testid="stButton"] {{
+            display: flex;
+            justify-content: center;
+          }}
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -300,24 +283,26 @@ def render_wc_grid(
         st.markdown("<div class='wc-y'>Weight</div>", unsafe_allow_html=True)
 
     with right:
-        st.markdown("<div class='wc-axis-wrap'><div>", unsafe_allow_html=True)
-
-        # MUST be immediately before st.radio for the scope selector to hit the right block
-        st.markdown("<span id='wc-grid-scope'></span>", unsafe_allow_html=True)
-
-        idx = st.radio(
-            "",
-            options=list(range(9)),
-            index=int(st.session_state.get(key, default_idx)),
-            key=key,
-            label_visibility="collapsed",
-        )
+        # Build the 3×3 grid
+        for r in range(3):
+            cols = st.columns(3, gap="small")
+            for c in range(3):
+                idx = r * 3 + c
+                aria_label = f"{aria_prefix}{idx}"
+                with cols[c]:
+                    clicked = st.button(
+                        aria_label,
+                        key=f"{key}__btn__{idx}",
+                        use_container_width=False,
+                    )
+                    if clicked:
+                        st.session_state[key] = idx
+                        selected_idx = idx  # immediate local update for same-run logic
 
         st.markdown(f"<div class='wc-x'>Complexity</div>", unsafe_allow_html=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
 
-    r, c = divmod(int(idx), 3)
-    return r, c
+    r, c = divmod(int(st.session_state.get(key, selected_idx)), 3)
+    return int(r), int(c)
 
 
 def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
