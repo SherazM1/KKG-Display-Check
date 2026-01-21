@@ -170,24 +170,17 @@ def _parse_rc(value: str) -> Optional[Tuple[int, int]]:
     except Exception:
         return None
 
-
 def render_weight_complexity_matrix_component(
     key: str = "wc",
-    default: Tuple[int, int] = (1, 1),
+    default: Tuple[int, int] = (2, 0),  # bottom-left
     size_px: int = 420,
 ) -> Tuple[int, int]:
     """
     Pixel-perfect clickable 3x3 matrix with persistence via URL query params.
 
-    Persistence:
-      - URL: ?{key}=r,c
-      - Session: st.session_state[key] = (r,c)
-
-    Clicking:
-      - JS updates parent URL query param and navigates (forces rerun + persists).
-
-    Visual:
-      - No % labels rendered.
+    - Uses anchor navigation (?{key}=r,c) with target="_top" so Streamlit reruns on click.
+    - No % labels rendered (blank cells).
+    - Selected cell gets highlight.
     """
     qp_val = _get_query_param(key)
     qp_rc = _parse_rc(qp_val) if qp_val else None
@@ -199,6 +192,11 @@ def render_weight_complexity_matrix_component(
 
     r_sel, c_sel = st.session_state[key]
 
+    def cell_html(r: int, c: int) -> str:
+        selected_cls = " wc-selected" if (r == r_sel and c == c_sel) else ""
+        href = f"?{key}={r},{c}"
+        return f'<a class="wc-cell{selected_cls}" data-r="{r}" data-c="{c}" href="{href}" target="_top" aria-label="Select {r},{c}"></a>'
+
     height_px = size_px + 70
     html = textwrap.dedent(
         f"""
@@ -207,17 +205,9 @@ def render_weight_complexity_matrix_component(
 
           <div class="wc-mid">
             <div class="wc-square" role="grid" aria-label="Weight vs Complexity">
-              <div class="wc-cell" data-r="0" data-c="0"></div>
-              <div class="wc-cell" data-r="0" data-c="1"></div>
-              <div class="wc-cell" data-r="0" data-c="2"></div>
-
-              <div class="wc-cell" data-r="1" data-c="0"></div>
-              <div class="wc-cell" data-r="1" data-c="1"></div>
-              <div class="wc-cell" data-r="1" data-c="2"></div>
-
-              <div class="wc-cell" data-r="2" data-c="0"></div>
-              <div class="wc-cell" data-r="2" data-c="1"></div>
-              <div class="wc-cell" data-r="2" data-c="2"></div>
+              {cell_html(0,0)}{cell_html(0,1)}{cell_html(0,2)}
+              {cell_html(1,0)}{cell_html(1,1)}{cell_html(1,2)}
+              {cell_html(2,0)}{cell_html(2,1)}{cell_html(2,2)}
             </div>
 
             <div class="wc-x">Complexity</div>
@@ -266,8 +256,8 @@ def render_weight_complexity_matrix_component(
             box-sizing:border-box;
             background:#ffffff;
             cursor:pointer;
-            position:relative;
-            user-select:none;
+            display:block;
+            text-decoration:none;
           }}
           .wc-cell[data-c="2"] {{ border-right: none; }}
           .wc-cell[data-r="2"] {{ border-bottom: none; }}
@@ -296,45 +286,11 @@ def render_weight_complexity_matrix_component(
             .wc-x {{ width: 100%; }}
           }}
         </style>
-
-        <script>
-          (function() {{
-            const KEY = {json.dumps(key)};
-            const selected = {{ r: {int(r_sel)}, c: {int(c_sel)} }};
-
-            function setSelectedClass() {{
-              document.querySelectorAll('.wc-cell').forEach(el => {{
-                const r = Number(el.dataset.r);
-                const c = Number(el.dataset.c);
-                const on = (r === selected.r && c === selected.c);
-                el.classList.toggle('wc-selected', on);
-                el.setAttribute('aria-selected', on ? 'true' : 'false');
-              }});
-            }}
-
-            function updateParentUrl(r, c) {{
-              const url = new URL(window.parent.location.href);
-              url.searchParams.set(KEY, `${{r}},${{c}}`);
-              window.parent.location.href = url.toString();
-            }}
-
-            document.querySelectorAll('.wc-cell').forEach(el => {{
-              el.addEventListener('click', () => {{
-                const r = Number(el.dataset.r);
-                const c = Number(el.dataset.c);
-                updateParentUrl(r, c);
-              }});
-            }});
-
-            setSelectedClass();
-          }})();
-        </script>
         """
     )
 
     components.html(html, height=height_px, scrolling=False)
     return st.session_state[key]
-
 
 # ---------- Pricing helpers ----------
 def _unit_factor(policy: Dict, qty: int) -> float:
