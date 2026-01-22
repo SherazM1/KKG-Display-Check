@@ -27,6 +27,11 @@ st.markdown(
           .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
           .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
           .muted { color:#6b7280; }
+          .kkg-total-line { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:6px 0; }
+          .kkg-total-key { font-weight:600; color:#374151; font-size:15px; }
+          .kkg-total-val { font-weight:600; color:#111827; font-size:16px; }
+          .kkg-total-amount { font-weight:700; font-size:34px; letter-spacing:0.3px; color:#111827; }
+          .kkg-total-range { font-size:16px; color:#374151; }
         </style>
         """
     ),
@@ -204,7 +209,7 @@ def render_wc_grid(
         ["Light", "Moderate", "Complex"],
     ]
 
-    cell_px = int(min(110, max(88, size_px // 3)))
+    cell_px = int(min(140, max(96, size_px // 3)))
 
     default_idx = int(default_rc[0] * 3 + default_rc[1])
     selected_idx = int(st.session_state.get(key, default_idx))
@@ -218,16 +223,29 @@ def render_wc_grid(
             min-width: {cell_px}px !important;
           }}
 
-          div[data-testid="stButton"] button {{
-            padding: 0.18rem 0.45rem !important;
+          div[data-testid="stVerticalBlockBorderWrapper"] {{
+            max-width: {cell_px}px;
+            min-height: {cell_px}px;
+            padding: 8px 10px !important;
+            margin: 0 auto;
+          }}
+
+          div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stButton"] {{
+            display: flex;
+            justify-content: center;
+          }}
+
+          div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stButton"] button {{
+            padding: 0.12rem 0.5rem !important;
             font-weight: 700 !important;
+            font-size: 12px !important;
             border-radius: 10px !important;
           }}
 
           .wc-cell-label {{
             font-weight: 800;
-            font-size: 15px;
-            line-height: 1.1;
+            font-size: 18px;
+            line-height: 1.15;
             text-align: center;
             color: #111827;
             user-select: none;
@@ -237,10 +255,10 @@ def render_wc_grid(
           }}
 
           .wc-ind {{
-            height: 6px;
+            height: 5px;
             width: 100%;
             border-radius: 999px;
-            margin: 2px 0 10px 0;
+            margin: 2px 0 8px 0;
           }}
         </style>
         """,
@@ -263,7 +281,7 @@ def render_wc_grid(
                     st.markdown(f"<div class='wc-cell-label'>{labels[r][c]}</div>", unsafe_allow_html=True)
 
                     btn_text = "Selected" if is_selected else "Select"
-                    if st.button(btn_text, key=f"{key}__{idx}", use_container_width=True):
+                    if st.button(btn_text, key=f"{key}__{idx}", use_container_width=False):
                         st.session_state[key] = idx
                         st.rerun()
 
@@ -425,7 +443,7 @@ def render_pdq_form() -> None:
         st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
     st.markdown("#### Select Weight Tier and Complexity Level")
-    selected_rc = render_wc_grid(key="wc_idx", size_px=420, default_rc=(2, 0))
+    selected_rc = render_wc_grid(key="wc_idx", size_px=360, default_rc=(2, 0))
 
     resolved = _resolve_parts_per_unit(catalog, form)
 
@@ -455,16 +473,27 @@ def render_pdq_form() -> None:
     left, right = st.columns([0.58, 0.42], gap="large")
 
     with left:
-        st.markdown("#### Totals")
-        st.write(f"Selected tier: **{selected_label}**")
-        st.write(f"Per-unit price: **${final_per_unit:,.2f}**")
-        st.write(f"Program total: **${final_total:,.2f}**")
-        st.write(f"Program total range: **${min_total:,.2f} – ${max_total:,.2f}**")
-        min_col, max_col = st.columns(2, gap="small")
-    with min_col:
-        st.metric("Min (25%)", f"${min_total:,.2f}")
-    with max_col:
-        st.metric("Max (45%)", f"${max_total:,.2f}")
+        st.markdown("### Totals")
+        st.markdown(
+            f"<div class='kkg-total-line'><span class='kkg-total-key'>Selected tier</span>"
+            f"<span class='kkg-total-val'>{selected_label}</span></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div class='kkg-total-line'><span class='kkg-total-key'>Per-unit price</span>"
+            f"<span class='kkg-total-val'>${final_per_unit:,.2f}</span></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div class='kkg-total-line'><span class='kkg-total-key'>Program total</span>"
+            f"<span class='kkg-total-amount'>${final_total:,.2f}</span></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div class='kkg-total-line'><span class='kkg-total-key'>Program total range</span>"
+            f"<span class='kkg-total-range'>${min_total:,.2f} - ${max_total:,.2f}</span></div>",
+            unsafe_allow_html=True,
+        )
 
     with right:
         st.empty()
