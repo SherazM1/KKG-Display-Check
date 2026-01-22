@@ -28,10 +28,10 @@ st.markdown(
           .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
           .muted { color:#6b7280; }
           .kkg-total-line { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:6px 0; }
-          .kkg-total-key { font-weight:600; color:#374151; font-size:15px; }
-          .kkg-total-val { font-weight:600; color:#111827; font-size:16px; }
+          .kkg-total-key { font-weight:600; color:#374151; font-size:34px; }
+          .kkg-total-val { font-weight:600; color:#111827; font-size:34px; }
           .kkg-total-amount { font-weight:700; font-size:34px; letter-spacing:0.3px; color:#111827; }
-          .kkg-total-range { font-size:16px; color:#374151; }
+          .kkg-total-range { font-size:34px; color:#374151; }
         </style>
         """
     ),
@@ -442,7 +442,7 @@ def render_pdq_form() -> None:
 
         st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
-    st.markdown("#### Select Weight Tier and Complexity Level")
+    st.markdown("#### Select Weight and Complexity Level")
     selected_rc = render_wc_grid(key="wc_idx", size_px=360, default_rc=(2, 0))
 
     resolved = _resolve_parts_per_unit(catalog, form)
