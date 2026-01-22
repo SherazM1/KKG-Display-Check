@@ -24,7 +24,7 @@ st.set_page_config(page_title="Display · KKG", layout="wide")
 CATALOG_PATH = "data/catalog/pdq.json"
 ASSETS_ROOT = "assets/references"
 
-ALLOWED_DIRS = {"pdq", "dumpbin", "pallet", "sidekick", "endcap", "display", "header"}
+ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header"}
 
 LABEL_OVERRIDES = {
     "digital_pdq_tray": "PDQ TRAY",
