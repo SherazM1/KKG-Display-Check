@@ -4,16 +4,17 @@
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import textwrap
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-import html
-import streamlit.components.v1 as components
 from urllib.parse import urlencode
+
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image, ImageOps
 
 # ---------- Page setup ----------
@@ -24,9 +25,13 @@ st.markdown(
         <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
           html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
-          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; }
+
+          /* Tile: transparent background so it blends in dark mode */
+          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:transparent; }
+
           .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
           .muted { color:#6b7280; }
+
           .kkg-total-line { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:6px 0; }
           .kkg-total-key { font-weight:600; color:#374151; font-size:34px; }
           .kkg-total-val { font-weight:600; color:#111827; font-size:34px; }
@@ -350,11 +355,23 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
     return [lst[i : i + n] for i in range(0, len(lst), n)]
 
 
-def _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image.Image:
+def _fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.Image:
+    """
+    Returns a consistent-size RGBA preview with transparent padding so images blend with theme.
+    """
     img = Image.open(path).convert("RGBA")
     contained = ImageOps.contain(img, (target_w, target_h))
-    padded = ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255))
-    return padded.convert("RGB")
+    padded = ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
+    return padded
+
+
+def _render_tile(t: OptionTile) -> None:
+    st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
+    st.image(_fixed_preview(t.path, target_w=640, target_h=460), use_container_width=True)
+    st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
+    if st.button("Select", key=f"select_{t.key}", use_container_width=True):
+        st.session_state.selected_display_key = t.key
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ---------- Page header ----------
@@ -368,16 +385,22 @@ if not tiles:
         "(e.g., `assets/references/pdq/digital_pdq_tray.png`)."
     )
 else:
-    for row in _chunk(tiles, 2):
+    pdq_tiles = [t for t in tiles if t.category == "pdq"]
+    other_tiles = [t for t in tiles if t.category != "pdq"]
+
+    # PDQ always at top: 1 row of 4 (folder only has 4 PNGs)
+    if pdq_tiles:
+        cols = st.columns(4, gap="large")
+        for col, t in zip(cols, pdq_tiles):
+            with col:
+                _render_tile(t)
+
+    # Everything else unchanged: 2 tiles per row
+    for row in _chunk(other_tiles, 2):
         cols = st.columns(len(row), gap="large")
         for c, t in zip(cols, row):
             with c:
-                st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
-                st.image(_fixed_preview(t.path, target_w=320, target_h=230), width=320)
-                st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
-                if st.button("Select", key=f"select_{t.key}", use_container_width=True):
-                    st.session_state.selected_display_key = t.key
-                st.markdown("</div>", unsafe_allow_html=True)
+                _render_tile(t)
 
 selected_key: Optional[str] = st.session_state.get("selected_display_key")
 
@@ -472,50 +495,51 @@ def render_pdq_form() -> None:
 
     left, right = st.columns([0.58, 0.42], gap="large")
 
-# inside render_pdq_form(), replace your current Totals block with this
-
     with left:
         st.markdown("### Totals")
 
-    FONT_PX = 22          # <= tweak this
-    LABEL_W_PX = 220      # <= tweak this (controls how close values sit)
-    COL_GAP_PX = 10       # <= tweak this (space between label/value)
-    ROW_MARGIN_PX = 8     # <= tweak this
+        FONT_PX = 22          # <= tweak this
+        LABEL_W_PX = 220      # <= tweak this (controls how close values sit)
+        COL_GAP_PX = 10       # <= tweak this (space between label/value)
+        ROW_MARGIN_PX = 8     # <= tweak this
 
-    rows = [
-        ("Selected tier", html.escape(str(selected_label)), "kkg-total-val"),
-        ("Per-unit price", f"${final_per_unit:,.2f}", "kkg-total-val"),
-        ("Program total", f"${final_total:,.2f}", "kkg-total-amount"),
-        ("Program total range", f"${min_total:,.2f} - ${max_total:,.2f}", "kkg-total-range"),
-    ]
+        rows = [
+            ("Selected tier", html.escape(str(selected_label)), "kkg-total-val"),
+            ("Per-unit price", f"${final_per_unit:,.2f}", "kkg-total-val"),
+            ("Program total", f"${final_total:,.2f}", "kkg-total-amount"),
+            ("Program total range", f"${min_total:,.2f} - ${max_total:,.2f}", "kkg-total-range"),
+        ]
 
-    for label, value, value_class in rows:
-        label_txt = html.escape(label.rstrip(":")) + ":"
-        st.markdown(
-            f"""
-            <div class="kkg-total-line"
-                 style="display:grid;
-                        grid-template-columns:{LABEL_W_PX}px max-content;
-                        column-gap:{COL_GAP_PX}px;
-                        align-items:baseline;
-                        margin:{ROW_MARGIN_PX}px 0;">
-              <span class="kkg-total-key"
-                    style="font-size:{FONT_PX}px; white-space:nowrap;">
-                {label_txt}
-              </span>
-              <span class="{value_class}"
-                    style="font-size:{FONT_PX}px; white-space:nowrap;">
-                {value}
-              </span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        for label, value, value_class in rows:
+            label_txt = html.escape(label.rstrip(":")) + ":"
+            st.markdown(
+                f"""
+                <div class="kkg-total-line"
+                     style="display:grid;
+                            grid-template-columns:{LABEL_W_PX}px max-content;
+                            column-gap:{COL_GAP_PX}px;
+                            align-items:baseline;
+                            margin:{ROW_MARGIN_PX}px 0;">
+                  <span class="kkg-total-key"
+                        style="font-size:{FONT_PX}px; white-space:nowrap;">
+                    {label_txt}
+                  </span>
+                  <span class="{value_class}"
+                        style="font-size:{FONT_PX}px; white-space:nowrap;">
+                    {value}
+                  </span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     with right:
         st.empty()
 
-    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
+        unsafe_allow_html=True,
+    )
 
 
 # ---------- Router ----------
