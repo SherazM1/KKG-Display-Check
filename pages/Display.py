@@ -8,6 +8,7 @@ import json
 import os
 import textwrap
 from dataclasses import dataclass
+from turtle import left, right
 from typing import Dict, List, Optional, Tuple
 import html
 import streamlit.components.v1 as components
@@ -475,30 +476,39 @@ def render_pdq_form() -> None:
     with left:
         st.markdown("### Totals")
         st.markdown(
-            f"<div class='kkg-total-line'><span class='kkg-total-key'>Selected tier</span>"
-            f"<span class='kkg-total-val'>{selected_label}</span></div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f"<div class='kkg-total-line'><span class='kkg-total-key'>Per-unit price</span>"
-            f"<span class='kkg-total-val'>${final_per_unit:,.2f}</span></div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f"<div class='kkg-total-line'><span class='kkg-total-key'>Program total</span>"
-            f"<span class='kkg-total-amount'>${final_total:,.2f}</span></div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f"<div class='kkg-total-line'><span class='kkg-total-key'>Program total range</span>"
-            f"<span class='kkg-total-range'>${min_total:,.2f} - ${max_total:,.2f}</span></div>",
-            unsafe_allow_html=True,
-        )
+        f"<div class='kkg-total-line'>"
+        f"<span class='kkg-total-key' style='font-size:34px;'>Selected tier</span>"
+        f"<span class='kkg-total-val' style='font-size:34px;'>{selected_label}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<div class='kkg-total-line'>"
+        f"<span class='kkg-total-key' style='font-size:34px;'>Per-unit price</span>"
+        f"<span class='kkg-total-val' style='font-size:34px;'>${final_per_unit:,.2f}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<div class='kkg-total-line'>"
+        f"<span class='kkg-total-key' style='font-size:34px;'>Program total</span>"
+        f"<span class='kkg-total-amount' style='font-size:34px;'>${final_total:,.2f}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<div class='kkg-total-line'>"
+        f"<span class='kkg-total-key' style='font-size:34px;'>Program total range</span>"
+        f"<span class='kkg-total-range' style='font-size:34px;'>${min_total:,.2f} - ${max_total:,.2f}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     with right:
         st.empty()
 
-    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
 
 
