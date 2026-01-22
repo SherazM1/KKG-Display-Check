@@ -8,6 +8,7 @@ import json
 import os
 import textwrap
 from dataclasses import dataclass
+from turtle import left, right
 from typing import Dict, List, Optional, Tuple
 import html
 import streamlit.components.v1 as components
@@ -478,8 +479,8 @@ def render_pdq_form() -> None:
         st.markdown("### Totals")
 
     FONT_PX = 22          # <= tweak this
-    LABEL_W_PX = 220      # <= tweak this (keeps label/value closer)
-    COL_GAP_PX = 16       # <= tweak this
+    LABEL_W_PX = 220      # <= tweak this (controls how close values sit)
+    COL_GAP_PX = 10       # <= tweak this (space between label/value)
     ROW_MARGIN_PX = 8     # <= tweak this
 
     rows = [
@@ -490,20 +491,21 @@ def render_pdq_form() -> None:
     ]
 
     for label, value, value_class in rows:
+        label_txt = html.escape(label.rstrip(":")) + ":"
         st.markdown(
             f"""
             <div class="kkg-total-line"
                  style="display:grid;
-                        grid-template-columns:{LABEL_W_PX}px 1fr;
+                        grid-template-columns:{LABEL_W_PX}px max-content;
                         column-gap:{COL_GAP_PX}px;
                         align-items:baseline;
                         margin:{ROW_MARGIN_PX}px 0;">
               <span class="kkg-total-key"
                     style="font-size:{FONT_PX}px; white-space:nowrap;">
-                {label}
+                {label_txt}
               </span>
               <span class="{value_class}"
-                    style="font-size:{FONT_PX}px; justify-self:end; white-space:nowrap;">
+                    style="font-size:{FONT_PX}px; white-space:nowrap;">
                 {value}
               </span>
             </div>
@@ -514,10 +516,7 @@ def render_pdq_form() -> None:
     with right:
         st.empty()
 
-
-
-        st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
-
+    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
 
 
 # ---------- Router ----------
