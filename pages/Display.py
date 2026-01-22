@@ -333,9 +333,12 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
     return [lst[i : i + n] for i in range(0, len(lst), n)]
 
 
-
-
-def _autocrop_foreground(img: Image.Image, *, bg_rgb: tuple[int, int, int] = (255, 255, 255), threshold: int = 12) -> Image.Image:
+def _autocrop_foreground(
+    img: Image.Image,
+    *,
+    bg_rgb: tuple[int, int, int] = (255, 255, 255),
+    threshold: int = 12,
+) -> Image.Image:
     """
     Crops uniform background around the artwork.
     - If image has alpha, crop by alpha bbox.
@@ -380,6 +383,7 @@ def _render_tile(t: OptionTile) -> None:
 
 # ---------- Page header ----------
 st.markdown("## Select the type of display")
+st.markdown("### PDQs")
 
 # ---------- Gallery ----------
 tiles = scan_pngs()
@@ -458,7 +462,9 @@ def render_pdq_form() -> None:
             saved = form.get(cid)
 
             if cid in ("quantity", "divider_count", "product_touches"):
-                default = int(saved) if saved is not None else (max(1, int(min_v)) if cid == "quantity" else int(min_v))
+                default = int(saved) if saved is not None else (
+                    max(1, int(min_v)) if cid == "quantity" else int(min_v)
+                )
                 val = st.number_input(label, min_value=int(min_v), step=1, value=int(default), key=widget_key)
                 form[cid] = int(val)
             else:
@@ -502,10 +508,10 @@ def render_pdq_form() -> None:
     with left:
         st.markdown("### Totals")
 
-        FONT_PX = 22          # tweak
-        LABEL_W_PX = 220      # tweak
-        COL_GAP_PX = 10       # tweak
-        ROW_MARGIN_PX = 8     # tweak
+        FONT_PX = 22  # tweak
+        LABEL_W_PX = 220  # tweak
+        COL_GAP_PX = 10  # tweak
+        ROW_MARGIN_PX = 8  # tweak
 
         rows = [
             ("Selected tier", html.escape(str(selected_label)), "kkg-total-val"),
