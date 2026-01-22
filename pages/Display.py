@@ -8,7 +8,6 @@ import json
 import os
 import textwrap
 from dataclasses import dataclass
-from turtle import left, right
 from typing import Dict, List, Optional, Tuple
 import html
 import streamlit.components.v1 as components
