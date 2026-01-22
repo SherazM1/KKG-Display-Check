@@ -19,45 +19,7 @@ from PIL import Image, ImageOps
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
-st.markdown(
-    textwrap.dedent(
-        """
-        <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-          html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
 
-          /* Tile: transparent + capped width so every category stays consistent */
-          .kkg-tile {
-            border:1px solid #e5e7eb;
-            border-radius:12px;
-            padding:12px;
-            background:transparent;
-            max-width:340px;   /* tweak: max tile width on large screens */
-            width:100%;
-            margin:0 auto;
-          }
-
-          .kkg-label {
-            text-align:center;
-            font-weight:700;
-            font-size:16px;
-            color:#3b3f46;
-            margin:10px 0 10px;
-            letter-spacing:0.5px;
-          }
-
-          .muted { color:#6b7280; }
-
-          .kkg-total-line { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:6px 0; }
-          .kkg-total-key { font-weight:600; color:#374151; font-size:34px; }
-          .kkg-total-val { font-weight:600; color:#111827; font-size:34px; }
-          .kkg-total-amount { font-weight:700; font-size:34px; letter-spacing:0.3px; color:#111827; }
-          .kkg-total-range { font-size:34px; color:#374151; }
-        </style>
-        """
-    ),
-    unsafe_allow_html=True,
-)
 
 CATALOG_PATH = "data/catalog/pdq.json"
 ASSETS_ROOT = "assets/references"
