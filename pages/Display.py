@@ -26,10 +26,26 @@ st.markdown(
         <style>
           html, body, [class*="css"] { font-family: 'Raleway', ui-sans-serif, system-ui; }
 
-          /* Tile: transparent background so it blends in dark mode */
-          .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:transparent; }
+          /* Tile: transparent + capped width so every category stays consistent */
+          .kkg-tile {
+            border:1px solid #e5e7eb;
+            border-radius:12px;
+            padding:12px;
+            background:transparent;
+            max-width:340px;   /* tweak: max tile width on large screens */
+            width:100%;
+            margin:0 auto;
+          }
 
-          .kkg-label { text-align:center; font-weight:700; font-size:16px; color:#3b3f46; margin:10px 0 10px; letter-spacing:0.5px; }
+          .kkg-label {
+            text-align:center;
+            font-weight:700;
+            font-size:16px;
+            color:#3b3f46;
+            margin:10px 0 10px;
+            letter-spacing:0.5px;
+          }
+
           .muted { color:#6b7280; }
 
           .kkg-total-line { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:6px 0; }
@@ -357,12 +373,11 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
 
 def _fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.Image:
     """
-    Returns a consistent-size RGBA preview with transparent padding so images blend with theme.
+    Consistent-size RGBA preview padded with transparency so images blend with theme.
     """
     img = Image.open(path).convert("RGBA")
     contained = ImageOps.contain(img, (target_w, target_h))
-    padded = ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
-    return padded
+    return ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
 
 
 def _render_tile(t: OptionTile) -> None:
@@ -388,14 +403,14 @@ else:
     pdq_tiles = [t for t in tiles if t.category == "pdq"]
     other_tiles = [t for t in tiles if t.category != "pdq"]
 
-    # PDQ always at top: 1 row of 4 (folder only has 4 PNGs)
+    # PDQ always at top: 1 row of 4
     if pdq_tiles:
         cols = st.columns(4, gap="large")
         for col, t in zip(cols, pdq_tiles):
             with col:
                 _render_tile(t)
 
-    # Everything else unchanged: 2 tiles per row
+    # Everything else: keep 2 per row
     for row in _chunk(other_tiles, 2):
         cols = st.columns(len(row), gap="large")
         for c, t in zip(cols, row):
@@ -498,10 +513,10 @@ def render_pdq_form() -> None:
     with left:
         st.markdown("### Totals")
 
-        FONT_PX = 22          # <= tweak this
-        LABEL_W_PX = 220      # <= tweak this (controls how close values sit)
-        COL_GAP_PX = 10       # <= tweak this (space between label/value)
-        ROW_MARGIN_PX = 8     # <= tweak this
+        FONT_PX = 22          # tweak
+        LABEL_W_PX = 220      # tweak
+        COL_GAP_PX = 10       # tweak
+        ROW_MARGIN_PX = 8     # tweak
 
         rows = [
             ("Selected tier", html.escape(str(selected_label)), "kkg-total-val"),
