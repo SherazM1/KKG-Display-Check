@@ -476,29 +476,39 @@ def render_pdq_form() -> None:
         st.markdown("### Totals")
         st.markdown(
         f"<div class='kkg-total-line'>"
-        f"<span class='kkg-total-key' style='font-size:34px;'>Selected tier</span>"
-        f"<span class='kkg-total-val' style='font-size:34px;'>{selected_label}</span>"
+        f"<span class='kkg-total-key' style='font-size:26px;'>Selected tier</span>"
+        f"<span class='kkg-total-val' style='font-size:26px;'>{selected_label}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
         f"<div class='kkg-total-line'>"
-        f"<span class='kkg-total-key' style='font-size:34px;'>Per-unit price</span>"
-        f"<span class='kkg-total-val' style='font-size:34px;'>${final_per_unit:,.2f}</span>"
+        f"<span class='kkg-total-key' style='font-size:26px;'>Per-unit price</span>"
+        f"<span class='kkg-total-val' style='font-size:26px;'>${final_per_unit:,.2f}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
         f"<div class='kkg-total-line'>"
-        f"<span class='kkg-total-key' style='font-size:34px;'>Program total</span>"
-        f"<span class='kkg-total-amount' style='font-size:34px;'>${final_total:,.2f}</span>"
+        f"<span class='kkg-total-key' style='font-size:26px;'>Program total</span>"
+        f"<span class='kkg-total-amount' style='font-size:26px;'>${final_total:,.2f}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
         f"<div class='kkg-total-line'>"
-        f"<span class='kkg-total-key' style='font-size:34px;'>Program total range</span>"
-        f"<span class='kkg-total-range' style='font-size:34px;'>${min_total:,.2f} - ${max_total:,.2f}</span>"
+        f"<span class='kkg-total-key' style='font-size:26px;'>Program total range</span>"
+        f"<span class='kkg-total-range' style='font-size:26px;'>${min_total:,.2f} - ${max_total:,.2f}</span>"
+        f"</div>",
+        f"<span class='kkg-total-key' style='font-size:26px;'>Program total</span>"
+        f"<span class='kkg-total-amount' style='font-size:26px;'>${final_total:,.2f}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<div class='kkg-total-line'>"
+        f"<span class='kkg-total-key' style='font-size:26px;'>Program total range</span>"
+        f"<span class='kkg-total-range' style='font-size:26px;'>${min_total:,.2f} - ${max_total:,.2f}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
