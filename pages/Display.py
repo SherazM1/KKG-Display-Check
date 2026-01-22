@@ -27,10 +27,10 @@ ASSETS_ROOT = "assets/references"
 ALLOWED_DIRS = {"pdq", "pallet", "sidekick", "endcap", "display", "header"}
 
 LABEL_OVERRIDES = {
-    "digital_pdq_tray": "PDQ TRAY",
-    "pdq-tray-standard": "PDQ TRAY",
-    "dump_bin": "DUMP BIN",
-    "dumpbin": "DUMP BIN",
+    "clipped_pdq_tray": "Clipped PDQ Tray",
+    "digital_pdq_tray": "Digital PDQ Tray",
+    "square_pdq_tray": "Square PDQ Tray",
+    "standardclub_pdq_tray": "Standard Club PDQ Tray",
 }
 
 
