@@ -333,18 +333,35 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
     return [lst[i : i + n] for i in range(0, len(lst), n)]
 
 
-def _fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.Image:
+# pages/Display.py
+
+def _fixed_preview(
+    path: str,
+    *,
+    target_w: int = 640,
+    target_h: int = 460,
+    scale: float = 1.0,
+) -> Image.Image:
     """
-    Consistent-size RGBA preview padded with transparency so images blend with theme.
+    Consistent-size RGBA preview padded with transparency.
+    `scale` shrinks (or enlarges) the contained image inside the target box.
     """
     img = Image.open(path).convert("RGBA")
-    contained = ImageOps.contain(img, (target_w, target_h))
+
+    inner_w = max(1, int(target_w * scale))
+    inner_h = max(1, int(target_h * scale))
+
+    contained = ImageOps.contain(img, (inner_w, inner_h))
     return ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
 
 
 def _render_tile(t: OptionTile) -> None:
+    # Shrink ONLY the digital PDQ tray so it visually matches the other 3.
+    # Tweak 0.85 up/down until it matches perfectly (e.g. 0.80–0.92).
+    scale = 0.85 if t.key == "pdq/digital_pdq_tray" else 1.0
+
     st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
-    st.image(_fixed_preview(t.path, target_w=640, target_h=460), use_container_width=True)
+    st.image(_fixed_preview(t.path, target_w=640, target_h=460, scale=scale), use_container_width=True)
     st.markdown(f"<div class='kkg-label'>{t.label}</div>", unsafe_allow_html=True)
     if st.button("Select", key=f"select_{t.key}", use_container_width=True):
         st.session_state.selected_display_key = t.key
