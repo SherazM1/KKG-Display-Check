@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageChops
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
@@ -333,11 +333,38 @@ def _chunk(lst: List[OptionTile], n: int) -> List[List[OptionTile]]:
     return [lst[i : i + n] for i in range(0, len(lst), n)]
 
 
+
+
+def _autocrop_foreground(img: Image.Image, *, bg_rgb: tuple[int, int, int] = (255, 255, 255), threshold: int = 12) -> Image.Image:
+    """
+    Crops uniform background around the artwork.
+    - If image has alpha, crop by alpha bbox.
+    - Else crop by difference from a near-white background.
+    """
+    rgba = img.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox:
+        return rgba.crop(bbox)
+
+    rgb = rgba.convert("RGB")
+    bg = Image.new("RGB", rgb.size, bg_rgb)
+    diff = ImageChops.difference(rgb, bg).convert("L")
+    mask = diff.point(lambda p: 255 if p > threshold else 0, mode="L")
+    bbox = mask.getbbox()
+    return rgba.crop(bbox) if bbox else rgba
+
+
 def _fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.Image:
     """
-    Consistent-size RGBA preview padded with transparency so images blend with theme.
+    Produces consistent-size previews by:
+    1) auto-cropping whitespace around the artwork
+    2) containing into the target box
+    3) padding to exact dimensions (transparent padding)
     """
     img = Image.open(path).convert("RGBA")
+    img = _autocrop_foreground(img, bg_rgb=(255, 255, 255), threshold=12)
+
     contained = ImageOps.contain(img, (target_w, target_h))
     return ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
 
