@@ -14,7 +14,7 @@
         {
           "key": "fp-48",
           "label": "48",
-          "base_value": 0,
+          "base_value": 9.75,
           "dims": { "width_in": 48, "depth_in": 48 },
           "rules": { "header_allowed": true, "shipper_allowed": true }
         }
@@ -27,7 +27,7 @@
       "type": "single",
       "required": true,
       "options": [
-        { "key": "header-yes", "label": "Yes", "base_value": 0 },
+        { "key": "header-yes", "label": "Yes", "base_value": 0.5 },
         { "key": "header-no", "label": "No", "base_value": 0 }
       ],
       "notes": "If Yes is chosen, adds the Sidekick header part (single price for all sidekicks)."
@@ -47,8 +47,8 @@
       "required": true,
       "options": [
         { "key": "printed-no", "label": "No", "base_value": 0 },
-        { "key": "printed-1s", "label": "Yes — 1 sided", "base_value": 0 },
-        { "key": "printed-2s", "label": "Yes — 2 sided", "base_value": 0 }
+        { "key": "printed-1s", "label": "Yes — 1 sided", "base_value": 0.85 },
+        { "key": "printed-2s", "label": "Yes — 2 sided", "base_value": 1.25 }
       ],
       "notes": "Flat per-unit add. 'No' adds $0."
     },
@@ -58,7 +58,7 @@
       "type": "single",
       "required": true,
       "options": [
-        { "key": "shipper-yes", "label": "Yes", "base_value": 0 },
+        { "key": "shipper-yes", "label": "Yes", "base_value": 0.6 },
         { "key": "shipper-no", "label": "No", "base_value": 0 }
       ],
       "notes": "Per-unit shipper; if Yes, resolves to shipper-48 for this display."
@@ -123,14 +123,14 @@
     }
   ],
   "parts": {
-    "footprint-fp-48": { "label": "Sidekick Base (48\")", "base_value": 0 },
-    "header-unit": { "label": "Header (Sidekick - any size)", "base_value": 0 },
+    "footprint-fp-48": { "label": "Sidekick Base (48\")", "base_value": 12.5 },
+    "header-unit": { "label": "Header (Sidekick - any size)", "base_value": 1.1 },
     "header-none": { "label": "No Header", "base_value": 0 },
-    "peg-unit": { "label": "Peg (per peg)", "base_value": 0 },
-    "printed-inside-1s": { "label": "Printed Inside (1 sided)", "base_value": 0 },
-    "printed-inside-2s": { "label": "Printed Inside (2 sided)", "base_value": 0 },
-    "shipper-48": { "label": "Shipper (48\")", "base_value": 0 },
-    "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0 }
+    "peg-unit": { "label": "Peg (per peg)", "base_value": 0.12 },
+    "printed-inside-1s": { "label": "Printed Inside (1 sided)", "base_value": 0.85 },
+    "printed-inside-2s": { "label": "Printed Inside (2 sided)", "base_value": 1.25 },
+    "shipper-48": { "label": "Shipper (48\")", "base_value": 2.75 },
+    "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0.18 }
   },
   "rules": {
     "resolve_footprint_base": {

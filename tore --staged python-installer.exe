@@ -1,0 +1,42 @@
+[1mdiff --git a/pages/Display.py b/pages/Display.py[m
+[1mindex 9452f1f..d9bb822 100644[m
+[1m--- a/pages/Display.py[m
+[1m+++ b/pages/Display.py[m
+[36m@@ -342,21 +342,22 @@[m [mdef render_pdq_form():[m
+             df = pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"])[m
+             st.table(df)[m
+ [m
+[31m-        st.markdown("#### Unit tier match")[m
+[31m-        st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")[m
+[31m-[m
+[31m-        st.markdown("#### Weight & Markup")[m
+[31m-        weight_str = _round_display_weight(total_lbs, policy)[m
+[31m-        st.write([m
+[31m-            f"Total weight: **{weight_str} lb**  "[m
+[31m-            f"<span class='pill'>unit={unit_weight_val:g} {unit_weight_unit}</span>"[m
+[31m-            f"<span class='pill'>qty={qty}</span>",[m
+[31m-            unsafe_allow_html=True,[m
+[31m-        )[m
+[31m-        st.write([m
+[31m-            f"Markup breakdown: Base **{base_markup*100:.0f}%** + Weight **{weight_add*100:.0f}%** + Complexity **{complexity_add*100:.0f}%** "[m
+[31m-            f"= **{markup_pct*100:.0f}%**"[m
+[31m-        )[m
+[32m+[m[32m    # st.markdown("#### Unit tier match")[m
+[32m+[m[32m# st.write(f"Quantity **{qty}** → factor **{unit_factor:.3f}**")[m
+[32m+[m
+[32m+[m[32m# st.markdown("#### Weight & Markup")[m
+[32m+[m[32m# weight_str = _round_display_weight(total_lbs, policy)[m
+[32m+[m[32m# st.write([m
+[32m+[m[32m#     f"Total weight: **{weight_str} lb**  "[m
+[32m+[m[32m#     f"<span class='pill'>unit={unit_weight_val:g} {unit_weight_unit}</span>"[m
+[32m+[m[32m#     f"<span class='pill'>qty={qty}</span>",[m
+[32m+[m[32m#     unsafe_allow_html=True,[m
+[32m+[m[32m# )[m
+[32m+[m[32m# st.write([m
+[32m+[m[32m#     f"Markup breakdown: Base **{base_markup*100:.0f}%** + Weight **{weight_add*100:.0f}%** + Complexity **{complexity_add*100:.0f}%** "[m
+[32m+[m[32m#     f"= **{markup_pct*100:.0f}%**"[m
+[32m+[m[32m# )[m
+[32m+[m
+ [m
+     with right:[m
+         st.markdown("#### Totals")[m

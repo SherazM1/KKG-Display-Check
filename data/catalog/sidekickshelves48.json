@@ -1,0 +1,224 @@
+{
+  "meta": {
+    "category": "sidekick",
+    "display_label": "Sidekick - Shelves 48",
+    "hero_image": "assets/references/sidekick/sidekickshelves48.png"
+  },
+  "controls": [
+    {
+      "id": "footprint",
+      "label": "Footprint",
+      "type": "single",
+      "required": true,
+      "options": [
+        {
+          "key": "fp-48-raw",
+          "label": "48",
+          "base_value": 0,
+          "dims": { "width_in": 48, "depth_in": 48 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-48-clean",
+          "label": "48",
+          "base_value": 0,
+          "dims": { "width_in": 48, "depth_in": 48 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        }
+      ],
+      "notes": "Fixed by selection (Sidekick - Shelves 48). Defaults to Raw; Edge selection switches between Raw/Clean priced footprint."
+    },
+    {
+      "id": "edge",
+      "label": "Edge",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "raw", "label": "Raw", "base_value": 0 },
+        { "key": "clean", "label": "Clean", "base_value": 0 }
+      ],
+      "notes": "Affects the footprint priced part (Raw vs Clean)."
+    },
+    {
+      "id": "header",
+      "label": "Header",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "header-yes", "label": "Yes", "base_value": 0 },
+        { "key": "header-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "If Yes is chosen, adds the Sidekick header part (single price for all sidekicks)."
+    },
+    {
+      "id": "shelves_count",
+      "label": "Number of Shelves",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Linear pricing: unit shelf price × count."
+    },
+    {
+      "id": "printed_inside",
+      "label": "Printed Inside",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "printed-no", "label": "No", "base_value": 0 },
+        { "key": "printed-1s", "label": "Yes — 1 sided", "base_value": 0 },
+        { "key": "printed-2s", "label": "Yes — 2 sided", "base_value": 0 }
+      ],
+      "notes": "Flat per-unit add. 'No' adds $0."
+    },
+    {
+      "id": "shipper",
+      "label": "Shipper",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "shipper-yes", "label": "Yes", "base_value": 0 },
+        { "key": "shipper-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "Per-unit shipper; if Yes, resolves to shipper-48 for this display."
+    },
+    {
+      "id": "assembly",
+      "label": "Assembly",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "assembly-kdf", "label": "KDF", "base_value": 0 },
+        { "key": "assembly-turnkey", "label": "Turnkey", "base_value": 0 }
+      ],
+      "notes": "KDF/Turnkey are non-priced switches; only Turnkey with touches adds cost."
+    },
+    {
+      "id": "product_touches",
+      "label": "Product Touches",
+      "type": "number",
+      "required": false,
+      "min": 0,
+      "notes": "Only used when Assembly = Turnkey; cost = touch unit × touches."
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "notes": "Used for unit tiers, total lbs, and program total."
+    },
+    {
+      "id": "unit_weight_unit",
+      "label": "Product Weight",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "lb", "label": "Pounds (lb)", "base_value": 0 },
+        { "key": "oz", "label": "Ounces (oz)", "base_value": 0 }
+      ],
+      "notes": "If oz is selected, unit weight is converted to pounds for total lbs."
+    },
+    {
+      "id": "unit_weight_value",
+      "label": "Unit Weight — Value",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Numeric value of unit weight; paired with the selected unit (oz/lb)."
+    },
+    {
+      "id": "complexity_level",
+      "label": "Complexity",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "cx-low", "label": "Low", "base_value": 0 },
+        { "key": "cx-med", "label": "Medium", "base_value": 0 },
+        { "key": "cx-high", "label": "High", "base_value": 0 }
+      ],
+      "notes": "Adds 0% / 5% / 10% to the base 35% markup respectively."
+    }
+  ],
+  "parts": {
+    "footprint-fp-48-raw": { "label": "Sidekick Shelves Base (48\" - Raw)", "base_value": 9.4 },
+    "footprint-fp-48-clean": { "label": "Sidekick Shelves Base (48\" - Clean)", "base_value": 11.8 },
+    "header-unit": { "label": "Header (Sidekick - any size)", "base_value": 1.05 },
+    "header-none": { "label": "No Header", "base_value": 0 },
+    "shelf-unit": { "label": "Shelf (per shelf)", "base_value": 0.62 },
+    "printed-inside-1s": { "label": "Printed Inside (1 sided)", "base_value": 0.95 },
+    "printed-inside-2s": { "label": "Printed Inside (2 sided)", "base_value": 1.35 },
+    "shipper-48": { "label": "Shipper (48\")", "base_value": 2.15 },
+    "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0.18 }
+  },
+  "rules": {
+    "resolve_footprint_base": {
+      "based_on_control": "footprint",
+      "map": {
+        "fp-48-raw": "footprint-fp-48-raw",
+        "fp-48-clean": "footprint-fp-48-clean"
+      }
+    },
+    "resolve_header": {
+      "when_control": "header",
+      "when_value": "header-yes",
+      "based_on_control": "footprint",
+      "match_on_dim": "width_in",
+      "map": { "48": "header-unit" },
+      "else": "header-none"
+    },
+    "resolve_dividers": {
+      "quantity_control": "shelves_count",
+      "based_on_control": "footprint",
+      "match_on_dim": "depth_in",
+      "map": { "48": "shelf-unit" },
+      "else": null,
+      "pricing": "linear"
+    },
+    "resolve_shipper": {
+      "when_control": "shipper",
+      "when_value": "shipper-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-48-raw": "shipper-48",
+        "fp-48-clean": "shipper-48"
+      },
+      "else": null
+    },
+    "resolve_assembly_touches": {
+      "when_control": "assembly",
+      "when_value": "assembly-turnkey",
+      "quantity_control": "product_touches",
+      "min_quantity": 1,
+      "part": "assembly-touch-unit",
+      "pricing": "linear",
+      "else": null
+    },
+    "resolve_printed_inside": {
+      "based_on_control": "printed_inside",
+      "map": {
+        "printed-no": null,
+        "printed-1s": "printed-inside-1s",
+        "printed-2s": "printed-inside-2s"
+      }
+    }
+  },
+  "policy": {
+    "matrix_markups": [
+      [0.35, 0.4, 0.45],
+      [0.3, 0.35, 0.4],
+      [0.25, 0.3, 0.35]
+    ],
+    "unit_tiers": [
+      { "min_qty": 1, "max_qty": 199, "factor": 1.0 },
+      { "min_qty": 200, "max_qty": 499, "factor": 0.98 },
+      { "min_qty": 500, "max_qty": 999, "factor": 0.96 },
+      { "min_qty": 1000, "max_qty": 1999, "factor": 0.94 },
+      { "min_qty": 2000, "max_qty": 2999, "factor": 0.92 },
+      { "min_qty": 3000, "max_qty": null, "factor": 0.9 }
+    ],
+    "tier_boundary": "inclusive",
+    "display_weight_round": 0.01,
+    "markup_application": "program_total"
+  }
+}

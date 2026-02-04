@@ -1,0 +1,172 @@
+[1mdiff --git a/pages/Display.py b/pages/Display.py[m
+[1mindex c94ac2d..848d32d 100644[m
+[1m--- a/pages/Display.py[m
+[1m+++ b/pages/Display.py[m
+[36m@@ -11,16 +11,15 @@[m [mfrom typing import Dict, List, Optional, Tuple[m
+ [m
+ import pandas as pd[m
+ import streamlit as st[m
+[32m+[m[32mimport streamlit.components.v1 as components[m
+ from PIL import Image, ImageOps[m
+ [m
+ # ---------- Page setup ----------[m
+ st.set_page_config(page_title="Display · KKG", layout="wide")[m
+ [m
+[31m-[m
+ CATALOG_PATH = "data/catalog/pdq.json"[m
+ ASSETS_ROOT = "assets/references"[m
+ [m
+[31m-# include your new folder "dumpbin"[m
+ ALLOWED_DIRS = {"pdq", "dumpbin", "pallet", "sidekick", "endcap", "display", "header"}[m
+ [m
+ LABEL_OVERRIDES = {[m
+[36m@@ -30,6 +29,7 @@[m [mLABEL_OVERRIDES = {[m
+     "dumpbin": "DUMP BIN",[m
+ }[m
+ [m
+[32m+[m
+ # ---------- Helpers ----------[m
+ def load_catalog(path: str) -> Dict:[m
+     if not os.path.isfile(path):[m
+[36m@@ -135,60 +135,211 @@[m [mdef _fixed_preview(path: str, target_w: int = 320, target_h: int = 230) -> Image[m
+     return padded.convert("RGB")[m
+ [m
+ [m
+[31m-def render_weight_complexity_sketch_matrix([m
+[31m-    key: str = "selected_grid",[m
+[31m-    bottom_row_labels: Tuple[str, str, str] = ("25%", "35%", "45%"),[m
+[31m-) -> Optional[Tuple[int, int]]:[m
+[31m-    """[m
+[31m-    Renders a single square divided into 9 cells (3x3), sketch-style.[m
+[31m-[m
+[31m-    - Left side says: Weight[m
+[31m-    - Bottom says: Complexity[m
+[31m-    - Bottom row shows the 3 labels inside the cells (25/35/45 like your sketch)[m
+[31m-    - Stores selection as (row_index, col_index) in st.session_state[key][m
+[31m-    """[m
+[31m-    if key not in st.session_state:[m
+[31m-        st.session_state[key] = (0, 0)[m
+[32m+[m[32mdef _get_query_param(name: str) -> Optional[str]:[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        qp = st.query_params[m
+[32m+[m[32m        if name not in qp:[m
+[32m+[m[32m            return None[m
+[32m+[m[32m        v = qp.get(name)[m
+[32m+[m[32m        if isinstance(v, list):[m
+[32m+[m[32m            return v[0] if v else None[m
+[32m+[m[32m        return str(v) if v is not None else None[m
+[32m+[m[32m    except Exception:[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            qp = st.experimental_get_query_params()[m
+[32m+[m[32m            v = qp.get(name)[m
+[32m+[m[32m            return v[0] if isinstance(v, list) and v else None[m
+[32m+[m[32m        except Exception:[m
+[32m+[m[32m            return None[m
+ [m
+[31m-    r_sel, c_sel = st.session_state[key][m
+ [m
+[31m-    left_col, right_col = st.columns([0.10, 0.90], gap="small")[m
+[32m+[m[32mdef _parse_rc(value: str) -> Optional[Tuple[int, int]]:[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        parts = value.split(",")[m
+[32m+[m[32m        if len(parts) != 2:[m
+[32m+[m[32m            return None[m
+[32m+[m[32m        r = int(parts[0].strip())[m
+[32m+[m[32m        c = int(parts[1].strip())[m
+[32m+[m[32m        if r not in (0, 1, 2) or c not in (0, 1, 2):[m
+[32m+[m[32m            return None[m
+[32m+[m[32m        return r, c[m
+[32m+[m[32m    except Exception:[m
+[32m+[m[32m        return None[m
+ [m
+[31m-    with left_col:[m
+[31m-        st.markdown("<div class='sk-ylabel'>Weight</div>", unsafe_allow_html=True)[m
+ [m
+[31m-    with right_col:[m
+[31m-        st.markdown("<div class='sk-matrix-col'>", unsafe_allow_html=True)[m
+[31m-        st.markdown("<div class='sk-square'><div class='sk-grid'>", unsafe_allow_html=True)[m
+[32m+[m[32mdef render_weight_complexity_matrix_component([m
+[32m+[m[32m    key: str = "wc",[m
+[32m+[m[32m    bottom_row_labels: Tuple[str, str, str] = ("25%", "35%", "45%"),[m
+[32m+[m[32m    default: Tuple[int, int] = (0, 0),[m
+[32m+[m[32m    size_px: int = 420,[m
+[32m+[m[32m) -> Tuple[int, int]:[m
+[32m+[m[32m    """[m
+[32m+[m[32m    Pixel-perfect clickable 3x3 matrix with persistence via URL query params.[m
+ [m
+[31m-        for r in range(3):[m
+[31m-            cols = st.columns(3, gap="small")[m
+[31m-            for c in range(3):[m
+[31m-                is_edge_right = (c == 2)[m
+[31m-                is_edge_bottom = (r == 2)[m
+[32m+[m[32m    Persistence:[m
+[32m+[m[32m      - URL: ?{key}=r,c[m
+[32m+[m[32m      - Session: st.session_state[key] = (r,c)[m
+ [m
+[31m-                classes = ["sk-cell"][m
+[31m-                if is_edge_right:[m
+[31m-                    classes.append("edge-right")[m
+[31m-                if is_edge_bottom:[m
+[31m-                    classes.append("edge-bottom")[m
+[31m-                if (r == r_sel and c == c_sel):[m
+[31m-                    classes.append("selected")[m
+[31m-                cls = " ".join(classes)[m
+[32m+[m[32m    Clicking:[m
+[32m+[m[32m      - JS updates parent URL query param and navigates (forces rerun + persists).[m
+[32m+[m[32m    """[m
+[32m+[m[32m    qp_val = _get_query_param(key)[m
+[32m+[m[32m    qp_rc = _parse_rc(qp_val) if qp_val else None[m
+ [m
+[31m-                cell_text = bottom_row_labels[c] if r == 2 else ""[m
+[32m+[m[32m    if key not in st.session_state:[m
+[32m+[m[32m        st.session_state[key] = qp_rc if qp_rc is not None else default[m
+[32m+[m[32m    elif qp_rc is not None and tuple(st.session_state[key]) != qp_rc:[m
+[32m+[m[32m        st.session_state[key] = qp_rc[m
+ [m
+[31m-                with cols[c]:[m
+[31m-                    st.markdown("<div class='sk-btn-holder'>", unsafe_allow_html=True)[m
+[31m-                    if st.button(" ", key=f"sk_cell_{r}_{c}", use_container_width=True):[m
+[31m-                        st.session_state[key] = (r, c)[m
+[31m-                    st.markdown("</div>", unsafe_allow_html=True)[m
+[31m-                    st.markdown(f"<div class='{cls}'>{cell_text}</div>", unsafe_allow_html=True)[m
+[32m+[m[32m    r_sel, c_sel = st.session_state[key][m
+ [m
+[31m-        st.markdown("</div></div>", unsafe_allow_html=True)[m
+[31m-        st.markdown("<div class='sk-xlabel'>Complexity</div>", unsafe_allow_html=True)[m
+[31m-        st.markdown("</div>", unsafe_allow_html=True)[m
+[32m+[m[32m    lbl0, lbl1, lbl2 = bottom_row_labels[m
+[32m+[m[32m    height_px = size_px + 70[m
+[32m+[m
+[32m+[m[32m    html = textwrap.dedent([m
+[32m+[m[32m        f"""[m
+[32m+[m[32m        <div class="wc-wrap" style="--size:{size_px}px;">[m
+[32m+[m[32m          <div class="wc-y">Weight</div>[m
+[32m+[m
+[32m+[m[32m          <div class="wc-mid">[m
+[32m+[m[32m            <div class="wc-square" role="grid" aria-label="Weight vs Complexity">[m
+[32m+[m[32m              <div class="wc-cell" data-r="0" data-c="0"></div>[m
+[32m+[m[32m              <div class="wc-cell" data-r="0" data-c="1"></div>[m
+[32m+[m[32m              <div class="wc-cell" data-r="0" data-c="2"></div>[m
+[32m+[m
+[32m+[m[32m              <div class="wc-cell" data-r="1" data-c="0"></div>[m
+[32m+[m[32m              <div class="wc-cell" data-r="1" data-c="1"></div>[m
+[32m+[m[32m              <div class="wc-cell" data-r="1" data-c="2"></div>[m
+[32m+[m
+[32m+[m[32m              <div class="wc-cell" data-r="2" data-c="0"><span class="wc-txt">{lbl0}</span></div>[m
+[32m+[m[32m              <div class="wc-cell" data-r="2" data-c="1"><span class="wc-txt">{lbl1}</span></div>[m
+[32m+[m[32m              <div class="wc-cell" data-r="2" data-c="2"><span class="wc-txt">{lbl2}</span></div>[m
+[32m+[m[32m            </div>[m
+[32m+[m
+[32m+[m[32m            <div class="wc-x">Complexity</div>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <style>[m
+[32m+[m[32m          .wc-wrap {{[m
+[32m+[m[32m            display:flex;[m
+[32m+[m[32m            align-items:stretch;[m
+[32m+[m[32m            gap:14px;[m
+[32m+[m[32m            width: 100%;[m
+[32m+[m[32m            margin: 8px 0 6px;[m
+[32m+[m[32m            font-family: 'Raleway', ui-sans-serif, system-ui;[m
+
