@@ -447,6 +447,71 @@ def render_pdq_form() -> None:
 
 
 # ---------- SIDEKICK CONFIG ----------
+def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict) -> str:
+    """
+    Returns the footprint option key that should be forced into `form["footprint"]`.
+
+    Supports:
+      - Pegged catalogs: footprint has exactly 1 option (fp-24 or fp-48) => use it.
+      - Shelved catalogs: footprint has multiple options AND an `edge` control.
+        Convention: footprint option keys contain "-raw" / "-clean" (or end with those).
+        If edge is unset, default to raw footprint when available.
+    """
+    fp_ctrl = cat.find_control(catalog, "footprint") or {}
+    fp_opts = fp_ctrl.get("options", []) or []
+
+    if not fp_opts:
+        return "fp-24"  # safe fallback
+
+    if len(fp_opts) == 1:
+        return str(fp_opts[0].get("key") or "fp-24")
+
+    # Shelved case: multiple footprint options, keyed by edge
+    edge = form.get("edge")
+    edge = None if edge in (None, "", "__unset__") else str(edge)
+
+    keys = [str(o.get("key") or "") for o in fp_opts if o.get("key")]
+
+    def _match_edge(k: str, e: str) -> bool:
+        kl = k.lower()
+        el = e.lower()
+        return kl.endswith(f"-{el}") or f"-{el}-" in kl or kl.endswith(el)
+
+    if edge:
+        for k in keys:
+            if _match_edge(k, edge):
+                return k
+
+    # Default edge to raw if present
+    for k in keys:
+        if _match_edge(k, "raw"):
+            return k
+
+    return keys[0] if keys else "fp-24"
+
+
+def _sidekick_footprint_pill(catalog: Dict, fp_key: str) -> str:
+    """
+    Builds the pill text (e.g., 'Footprint: 24', 'Footprint: 48', 'Footprint: 24 (Raw)').
+    Uses footprint dims when present; falls back to the key.
+    """
+    fp_ctrl = cat.find_control(catalog, "footprint") or {}
+    fp_opts = fp_ctrl.get("options", []) or []
+
+    opt = next((o for o in fp_opts if o.get("key") == fp_key), None) or {}
+    dims = opt.get("dims", {}) or {}
+    w = dims.get("width_in")
+
+    label = f"{w}" if w is not None else str(opt.get("label") or fp_key)
+
+    fp_key_l = fp_key.lower()
+    if "raw" in fp_key_l:
+        return f"Footprint: {label} (Raw)"
+    if "clean" in fp_key_l:
+        return f"Footprint: {label} (Clean)"
+    return f"Footprint: {label}"
+
+
 def render_sidekick_form(selected_stem: str) -> None:
     catalog_path = f"data/catalog/{selected_stem}.json"
     catalog = cat.load_catalog(catalog_path)
@@ -459,13 +524,14 @@ def render_sidekick_form(selected_stem: str) -> None:
         st.session_state.sidekick_form = {}
     form: Dict = st.session_state.sidekick_form
 
-    st.markdown("<div class='pill'>Footprint: 24</div>", unsafe_allow_html=True)
+    fixed_fp_key = _pick_sidekick_fixed_footprint(catalog, form)
+    st.markdown(f"<div class='pill'>{_sidekick_footprint_pill(catalog, fixed_fp_key)}</div>", unsafe_allow_html=True)
 
     unlocked = _render_catalog_controls(
         catalog=catalog,
         form=form,
         prefix="sidekick",
-        fixed_footprint="fp-24",
+        fixed_footprint=fixed_fp_key,
     )
 
     _compute_and_render_totals(
@@ -475,6 +541,7 @@ def render_sidekick_form(selected_stem: str) -> None:
         wc_default=(2, 0),
         unlocked=unlocked,
     )
+
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
     render_pdq_form()
