@@ -33,9 +33,17 @@ ROW_ORDER = ["pdq", "sidekick"]
 ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks"}
 
 LABEL_OVERRIDES = {
-    "digital_pdq_tray": "PDQ TRAY",
-    "pdq-tray-standard": "PDQ TRAY",
-    "dump_bin": "DUMP BIN",
+    # --- PDQs (order doesn't matter; mapping by filename stem) ---
+    "clipped_pdq_tray": "Clipped PDQ Tray",
+    "digital_pdq_tray": "Angled PDQ Tray",
+    "square_pdq_tray": "Square PDQ Tray",
+    "standardclub_pdq_tray": "Standard PDQ Tray",
+
+    # --- Sidekicks ---
+    "sidekickpeg24": "Sidekick - Pegged 24",
+    "sidekickpeg48": "Sidekick - Pegged 48",
+    "sidekickshelves24": "Sidekick - Shelves 24",
+    "sidekickshelves48": "Sidekick - Shelves 48",
 }
 
 
@@ -47,6 +55,12 @@ def render_wc_grid(
     default_rc: Tuple[int, int] = (2, 0),
     gap: str = "xxsmall",
 ) -> Tuple[int, int]:
+    """
+    3x3 selection grid with axis labels:
+      - Left (vertical): Weight
+      - Bottom (horizontal): Complexity
+    Returns (row, col) selected.
+    """
     labels = [
         ["Heavy", "Moderate/Heavy", "Complex/Heavy"],
         ["Medium", "Moderate/Medium", "Complex/Medium"],
@@ -88,35 +102,68 @@ def render_wc_grid(
             border-radius: 999px;
             margin: 2px 0 8px 0;
           }}
+          .wc-axis-left {{
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #111827;
+            transform: rotate(-90deg);
+            white-space: nowrap;
+            user-select: none;
+          }}
+          .wc-axis-bottom {{
+            text-align: center;
+            font-weight: 800;
+            margin-top: 10px;
+            color: #111827;
+            user-select: none;
+          }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    for r in range(3):
-        cols = st.columns(3, gap=gap)
-        for c in range(3):
-            idx = r * 3 + c
-            is_selected = idx == selected_idx
-            with cols[c]:
-                tile = st.container(border=True)
-                with tile:
-                    st.markdown(
-                        f"<div class='wc-ind' style='background:{'#111827' if is_selected else '#e5e7eb'};'></div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(f"<div class='wc-cell-label'>{labels[r][c]}</div>", unsafe_allow_html=True)
+    outer = st.columns([0.06, 0.94], gap="small")
 
-                    btn_text = "Selected" if is_selected else "Select"
-                    if st.button(btn_text, key=f"{key}__{idx}", use_container_width=False):
-                        st.session_state[key] = idx
-                        st.rerun()
+    with outer[0]:
+        st.markdown("<div class='wc-axis-left'>Weight</div>", unsafe_allow_html=True)
+
+    with outer[1]:
+        for r in range(3):
+            cols = st.columns(3, gap=gap)
+            for c in range(3):
+                idx = r * 3 + c
+                is_selected = idx == selected_idx
+
+                with cols[c]:
+                    tile = st.container(border=True)
+                    with tile:
+                        st.markdown(
+                            f"<div class='wc-ind' style='background:{'#111827' if is_selected else '#e5e7eb'};'></div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(f"<div class='wc-cell-label'>{labels[r][c]}</div>", unsafe_allow_html=True)
+
+                        btn_text = "Selected" if is_selected else "Select"
+                        if st.button(btn_text, key=f"{key}__{idx}", use_container_width=False):
+                            st.session_state[key] = idx
+                            st.rerun()
+
+        st.markdown("<div class='wc-axis-bottom'>Complexity</div>", unsafe_allow_html=True)
 
     rr, cc = divmod(int(st.session_state[key]), 3)
     return int(rr), int(cc)
 
 
-def _is_required_answered(ctrl: Dict, form: Dict) -> bool:
+
+def _is_required_answered(ctrl: Dict, form: Dict, *, prefix: str) -> bool:
+    """
+    Strict gating rules:
+      - single: must NOT be '__unset__'
+      - number: must be >= min AND user must have interacted (touched), even if value is 0
+    """
     cid = ctrl.get("id")
     if not cid:
         return True
@@ -128,20 +175,22 @@ def _is_required_answered(ctrl: Dict, form: Dict) -> bool:
 
     if ctype == "single":
         val = form.get(cid)
-        return val is not None and str(val).strip() != ""
+        return val not in (None, "", "__unset__")
 
     if ctype == "number":
-        if cid not in form:
+        touched_key = f"{prefix}__{cid}__touched"
+        if not bool(st.session_state.get(touched_key, False)):
             return False
+
         try:
             v = float(form.get(cid))
         except Exception:
             return False
+
         min_v = float(ctrl.get("min", 0) or 0)
         return v >= min_v
 
     return True
-
 
 def _control_visible_for_form(ctrl_id: str, form: Dict) -> bool:
     if ctrl_id == "product_touches":
@@ -155,14 +204,14 @@ def _render_catalog_controls(
     form: Dict,
     prefix: str,
     fixed_footprint: Optional[str] = None,
-) -> None:
+) -> bool:
     """
-    Renders controls with step-gating (required chain).
-    Keeps original PDQ rendering behavior:
-      - <=3 options => radio(horizontal), else selectbox
-      - number inputs: quantity/divider_count/product_touches/pegs_count => int step=1
-      - product_touches only visible when turnkey
-      - skips unit_weight_* and complexity_level (WC grid is used instead)
+    Renders controls with strict step-gating (required chain).
+    Returns True iff all required controls (that are visible in the current form state) are answered.
+
+    Strict behavior:
+      - required single controls start at '__unset__' via a '— Select —' option
+      - required number controls are not "answered" until touched, even if 0
     """
     required_chain_ok = True
 
@@ -186,6 +235,7 @@ def _render_catalog_controls(
 
         if not _control_visible_for_form(cid, form):
             form.pop(cid, None)
+            st.session_state.pop(f"{prefix}__{cid}__touched", None)
             continue
 
         enabled = required_chain_ok
@@ -194,6 +244,12 @@ def _render_catalog_controls(
             opts = ctrl.get("options", []) or []
             opt_labels = [o.get("label") for o in opts]
             opt_keys = [o.get("key") for o in opts]
+
+            # Strict: required singles start as unset
+            if bool(ctrl.get("required", False)):
+                opt_labels = ["— Select —"] + opt_labels
+                opt_keys = ["__unset__"] + opt_keys
+                form.setdefault(cid, "__unset__")
 
             default_idx = 0
             if cid in form and form[cid] in opt_keys:
@@ -217,6 +273,9 @@ def _render_catalog_controls(
         elif ctype == "number":
             min_v = ctrl.get("min", 0)
             saved = form.get(cid)
+
+            touched_key = f"{prefix}__{cid}__touched"
+            prev_val = st.session_state.get(f"{prefix}__{cid}__prev")
 
             is_int = cid in ("quantity", "divider_count", "product_touches", "pegs_count")
             if is_int:
@@ -244,17 +303,51 @@ def _render_catalog_controls(
                 if enabled:
                     form[cid] = float(val)
 
+            # Strict: mark touched only after user interaction changes the value
+            if enabled:
+                current = form.get(cid)
+                if prev_val is None:
+                    st.session_state[f"{prefix}__{cid}__prev"] = current
+                else:
+                    if current != prev_val:
+                        st.session_state[touched_key] = True
+                        st.session_state[f"{prefix}__{cid}__prev"] = current
+
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
         if required_chain_ok:
-            required_chain_ok = _is_required_answered(ctrl, form)
+            required_chain_ok = _is_required_answered(ctrl, form, prefix=prefix)
 
         if not required_chain_ok:
             st.caption("Complete the current step to continue.")
 
+    # Final completion check (only visible required fields are evaluated in-loop)
+    return bool(required_chain_ok)
 
-def _compute_and_render_totals(*, catalog: Dict, form: Dict, wc_key: str, wc_default: Tuple[int, int]) -> None:
+
+def _compute_and_render_totals(
+    *,
+    catalog: Dict,
+    form: Dict,
+    wc_key: str,
+    wc_default: Tuple[int, int],
+    unlocked: bool,
+) -> None:
+    """
+    If unlocked=False:
+      - WC grid and totals are visually present but non-interactive (locked message)
+      - no pricing math is run
+    """
+    if not unlocked:
+        st.markdown("#### Select Weight and Complexity Level")
+        st.caption("Complete the steps above to continue.")
+        st.markdown(
+            "<div class='muted'>Totals will appear once all required fields are selected.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
     policy = catalog.get("policy", {}) or {}
 
     st.markdown("#### Select Weight and Complexity Level")
@@ -331,7 +424,9 @@ def render_pdq_form() -> None:
     catalog = cat.load_catalog(CATALOG_PATH_PDQ)
 
     st.divider()
-    st.subheader("PDQ TRAY — Configuration")
+    display_label = (catalog.get("meta", {}) or {}).get("display_label", "PDQ Tray")
+    st.subheader(f"{display_label.upper()} — Configuration")
+
 
     if "form" not in st.session_state:
         st.session_state.form = {}
@@ -347,7 +442,9 @@ def render_sidekick_form(selected_stem: str) -> None:
     catalog = cat.load_catalog(catalog_path)
 
     st.divider()
-    st.subheader("SIDEKICK 24 PEGGED — Configuration")
+    display_label = (catalog.get("meta", {}) or {}).get("display_label", "Sidekick")
+    st.subheader(f"{display_label.upper()} — Configuration")
+
 
     if "sidekick_form" not in st.session_state:
         st.session_state.sidekick_form = {}
