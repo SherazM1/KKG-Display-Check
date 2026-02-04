@@ -427,13 +427,19 @@ def render_pdq_form() -> None:
     display_label = (catalog.get("meta", {}) or {}).get("display_label", "PDQ Tray")
     st.subheader(f"{display_label.upper()} — Configuration")
 
-
     if "form" not in st.session_state:
         st.session_state.form = {}
     form: Dict = st.session_state.form
 
-    _render_catalog_controls(catalog=catalog, form=form, prefix="pdq")
-    _compute_and_render_totals(catalog=catalog, form=form, wc_key="wc_idx", wc_default=(2, 0))
+    unlocked = _render_catalog_controls(catalog=catalog, form=form, prefix="pdq")
+
+    _compute_and_render_totals(
+        catalog=catalog,
+        form=form,
+        wc_key="wc_idx",
+        wc_default=(2, 0),
+        unlocked=unlocked,
+    )
 
 
 # ---------- SIDEKICK CONFIG ----------
@@ -445,17 +451,26 @@ def render_sidekick_form(selected_stem: str) -> None:
     display_label = (catalog.get("meta", {}) or {}).get("display_label", "Sidekick")
     st.subheader(f"{display_label.upper()} — Configuration")
 
-
     if "sidekick_form" not in st.session_state:
         st.session_state.sidekick_form = {}
     form: Dict = st.session_state.sidekick_form
 
     st.markdown("<div class='pill'>Footprint: 24</div>", unsafe_allow_html=True)
 
-    _render_catalog_controls(catalog=catalog, form=form, prefix="sidekick", fixed_footprint="fp-24")
-    _compute_and_render_totals(catalog=catalog, form=form, wc_key="sidekick_wc_idx", wc_default=(2, 0))
+    unlocked = _render_catalog_controls(
+        catalog=catalog,
+        form=form,
+        prefix="sidekick",
+        fixed_footprint="fp-24",
+    )
 
-
+    _compute_and_render_totals(
+        catalog=catalog,
+        form=form,
+        wc_key="sidekick_wc_idx",
+        wc_default=(2, 0),
+        unlocked=unlocked,
+    )
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
     render_pdq_form()
