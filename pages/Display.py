@@ -447,7 +447,7 @@ def render_pdq_form() -> None:
 
 
 # ---------- SIDEKICK CONFIG ----------
-def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict) -> str:
+def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict, *, prefix: str = "sidekick") -> str:
     """
     Returns the footprint option key that should be forced into `form["footprint"]`.
 
@@ -467,7 +467,19 @@ def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict) -> str:
         return str(fp_opts[0].get("key") or "fp-24")
 
     # Shelved case: multiple footprint options, keyed by edge
+    # Prefer the current widget selection (label) over stale form state.
     edge = form.get("edge")
+    widget_key = f"{prefix}__edge"
+    if widget_key in st.session_state:
+        edge_ctrl = cat.find_control(catalog, "edge") or {}
+        edge_opts = edge_ctrl.get("options", []) or []
+        label_to_key = {
+            str(o.get("label")): str(o.get("key"))
+            for o in edge_opts
+            if o.get("label") is not None and o.get("key") is not None
+        }
+        edge = label_to_key.get(str(st.session_state.get(widget_key)))
+
     edge = None if edge in (None, "", "__unset__") else str(edge)
 
     keys = [str(o.get("key") or "") for o in fp_opts if o.get("key")]
@@ -524,7 +536,7 @@ def render_sidekick_form(selected_stem: str) -> None:
         st.session_state.sidekick_form = {}
     form: Dict = st.session_state.sidekick_form
 
-    fixed_fp_key = _pick_sidekick_fixed_footprint(catalog, form)
+    fixed_fp_key = _pick_sidekick_fixed_footprint(catalog, form, prefix="sidekick")
     st.markdown(f"<div class='pill'>{_sidekick_footprint_pill(catalog, fixed_fp_key)}</div>", unsafe_allow_html=True)
 
     unlocked = _render_catalog_controls(
