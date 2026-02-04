@@ -52,7 +52,12 @@ def matrix_markup_pct(policy: Dict, rc: Tuple[int, int]) -> float:
     return float(grid[r][c])
 
 
-def resolve_parts_per_unit(catalog: Dict, form: Dict, *, footprint_dims: Tuple[int | None, int | None]) -> List[Tuple[str, int]]:
+def resolve_parts_per_unit(
+    catalog: Dict,
+    form: Dict,
+    *,
+    footprint_dims: Tuple[int | None, int | None],
+) -> List[Tuple[str, int]]:
     """
     Applies catalog rules to produce a list of (part_key, qty_per_unit).
     """
@@ -79,7 +84,7 @@ def resolve_parts_per_unit(catalog: Dict, form: Dict, *, footprint_dims: Tuple[i
         if part:
             resolved.append((part, 1))
 
-    # dividers
+    # dividers (also used for sidekick pegs via quantity_control)
     if "resolve_dividers" in rules:
         r = rules["resolve_dividers"]
         qty_ctrl = r.get("quantity_control")
@@ -107,5 +112,14 @@ def resolve_parts_per_unit(catalog: Dict, form: Dict, *, footprint_dims: Tuple[i
                 part = r.get("part")
                 if part:
                     resolved.append((part, tqty))
+
+    # printed inside (sidekick-only; PDQ unaffected unless rule exists)
+    if "resolve_printed_inside" in rules:
+        r = rules["resolve_printed_inside"]
+        ctrl_id = r.get("based_on_control")
+        selected = form.get(ctrl_id)
+        part = (r.get("map", {}) or {}).get(selected)
+        if part:
+            resolved.append((part, 1))
 
     return resolved

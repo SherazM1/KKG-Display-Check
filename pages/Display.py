@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import html
-import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
-import pandas as pd
 import streamlit as st
 
 from app import catalog as cat
@@ -22,7 +20,7 @@ st.markdown(
       .kkg-tile { border:1px solid #e5e7eb; border-radius:12px; padding:10px; }
       .kkg-label { text-align:center; font-weight:800; font-size:16px; color:#111827; margin:10px 0 8px; letter-spacing:0.4px; }
       .muted { color:#6b7280; }
-      .pill { display:inline-block; padding:2px 8px; border:1px solid #e5e7eb; border-radius:999px; font-size:12px; margin-left:6px; }
+      .pill { display:inline-block; padding:2px 8px; border:1px solid #e5e7eb; border-radius:999px; font-size:12px; margin:6px 0 10px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -31,16 +29,15 @@ st.markdown(
 ASSETS_ROOT = "assets/references"
 CATALOG_PATH_PDQ = "data/catalog/pdq.json"
 
-# Category rows we want right now
 ROW_ORDER = ["pdq", "sidekick"]
 ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks"}
 
-# Labels you want (keep “PDQ TRAY” style)
 LABEL_OVERRIDES = {
     "digital_pdq_tray": "PDQ TRAY",
     "pdq-tray-standard": "PDQ TRAY",
     "dump_bin": "DUMP BIN",
 }
+
 
 # ---------- Weight/Complexity grid ----------
 def render_wc_grid(
@@ -101,7 +98,6 @@ def render_wc_grid(
         for c in range(3):
             idx = r * 3 + c
             is_selected = idx == selected_idx
-
             with cols[c]:
                 tile = st.container(border=True)
                 with tile:
@@ -120,102 +116,155 @@ def render_wc_grid(
     return int(rr), int(cc)
 
 
-# ---------- Header ----------
-st.markdown("## Select the type of display")
+def _is_required_answered(ctrl: Dict, form: Dict) -> bool:
+    cid = ctrl.get("id")
+    if not cid:
+        return True
 
-# ---------- Rows: PDQs then Sidekicks ----------
-for cat_name in ROW_ORDER:
-    st.markdown(f"### {ROW_TITLES.get(cat_name, cat_name.title())}")
+    if not bool(ctrl.get("required", False)):
+        return True
 
-    tiles = gallery.scan_category_pngs(ASSETS_ROOT, cat_name, label_overrides=LABEL_OVERRIDES)
+    ctype = ctrl.get("type")
 
-    if not tiles:
-        st.caption(f"No images found in `{ASSETS_ROOT}/{cat_name}`.")
-        continue
+    if ctype == "single":
+        val = form.get(cid)
+        return val is not None and str(val).strip() != ""
 
-    # You said 4 each, so we render 4 columns (and it still works if fewer)
-    cols = st.columns(4, gap="large")
-    for i, t in enumerate(tiles[:4]):
-        with cols[i]:
-            gallery.render_tile(t, preview_w=640, preview_h=460)
+    if ctype == "number":
+        if cid not in form:
+            return False
+        try:
+            v = float(form.get(cid))
+        except Exception:
+            return False
+        min_v = float(ctrl.get("min", 0) or 0)
+        return v >= min_v
 
-# Selection key (one at a time)
-selected_key: Optional[str] = st.session_state.get("selected_display_key")
+    return True
 
-# ---------- PDQ CONFIG ----------
-def render_pdq_form() -> None:
-    catalog = cat.load_catalog(CATALOG_PATH_PDQ)
-    policy = catalog.get("policy", {}) or {}
 
-    st.divider()
-    st.subheader("PDQ TRAY — Configuration")
+def _control_visible_for_form(ctrl_id: str, form: Dict) -> bool:
+    if ctrl_id == "product_touches":
+        return form.get("assembly") == "assembly-turnkey"
+    return True
 
-    if "form" not in st.session_state:
-        st.session_state.form = {}
-    form: Dict = st.session_state.form
 
-    # Render catalog-driven controls (except we currently hide weight/unit/complexity controls if they exist in JSON)
+def _render_catalog_controls(
+    *,
+    catalog: Dict,
+    form: Dict,
+    prefix: str,
+    fixed_footprint: Optional[str] = None,
+) -> None:
+    """
+    Renders controls with step-gating (required chain).
+    Keeps original PDQ rendering behavior:
+      - <=3 options => radio(horizontal), else selectbox
+      - number inputs: quantity/divider_count/product_touches/pegs_count => int step=1
+      - product_touches only visible when turnkey
+      - skips unit_weight_* and complexity_level (WC grid is used instead)
+    """
+    required_chain_ok = True
+
+    if fixed_footprint:
+        form["footprint"] = fixed_footprint
+
     for ctrl in catalog.get("controls", []) or []:
         cid = ctrl.get("id")
         ctype = ctrl.get("type")
         label = ctrl.get("label")
-        widget_key = f"pdq__{cid}"
+        widget_key = f"{prefix}__{cid}"
 
-        # Keep this: product touches only if turnkey
-        if cid == "product_touches":
-            if form.get("assembly") != "assembly-turnkey":
-                form.pop("product_touches", None)
-                continue
+        if not cid:
+            continue
 
-        # If your pdq.json still contains these but you are using the 3×3 grid UI,
-        # you can skip them here (we keep the grid below).
+        if cid == "footprint" and fixed_footprint:
+            continue
+
         if cid in ("unit_weight_unit", "unit_weight_value", "complexity_level"):
             continue
 
-        if ctype == "single":
-            opts = ctrl.get("options", []) or []
-            labels = [o.get("label") for o in opts]
-            keys = [o.get("key") for o in opts]
-
-            default_idx = 0
-            if cid in form and form[cid] in keys:
-                default_idx = keys.index(form[cid])
-
-            if len(labels) <= 3:
-                choice = st.radio(label, labels, index=default_idx, key=widget_key, horizontal=True)
-            else:
-                choice = st.selectbox(label, labels, index=default_idx, key=widget_key)
-
-            form[cid] = keys[labels.index(choice)]
+        if not _control_visible_for_form(cid, form):
+            form.pop(cid, None)
             continue
 
-        if ctype == "number":
+        enabled = required_chain_ok
+
+        if ctype == "single":
+            opts = ctrl.get("options", []) or []
+            opt_labels = [o.get("label") for o in opts]
+            opt_keys = [o.get("key") for o in opts]
+
+            default_idx = 0
+            if cid in form and form[cid] in opt_keys:
+                default_idx = opt_keys.index(form[cid])
+
+            if len(opt_labels) <= 3:
+                choice = st.radio(
+                    label,
+                    opt_labels,
+                    index=default_idx,
+                    key=widget_key,
+                    horizontal=True,
+                    disabled=not enabled,
+                )
+            else:
+                choice = st.selectbox(label, opt_labels, index=default_idx, key=widget_key, disabled=not enabled)
+
+            if enabled:
+                form[cid] = opt_keys[opt_labels.index(choice)]
+
+        elif ctype == "number":
             min_v = ctrl.get("min", 0)
             saved = form.get(cid)
 
-            if cid in ("quantity", "divider_count", "product_touches"):
+            is_int = cid in ("quantity", "divider_count", "product_touches", "pegs_count")
+            if is_int:
                 default = int(saved) if saved is not None else (max(1, int(min_v)) if cid == "quantity" else int(min_v))
-                val = st.number_input(label, min_value=int(min_v), step=1, value=int(default), key=widget_key)
-                form[cid] = int(val)
+                val = st.number_input(
+                    label,
+                    min_value=int(min_v),
+                    step=1,
+                    value=int(default),
+                    key=widget_key,
+                    disabled=not enabled,
+                )
+                if enabled:
+                    form[cid] = int(val)
             else:
                 default = float(saved) if saved is not None else float(min_v)
-                val = st.number_input(label, min_value=float(min_v), step=0.01, value=float(default), key=widget_key)
-                form[cid] = float(val)
-            continue
+                val = st.number_input(
+                    label,
+                    min_value=float(min_v),
+                    step=0.01,
+                    value=float(default),
+                    key=widget_key,
+                    disabled=not enabled,
+                )
+                if enabled:
+                    form[cid] = float(val)
 
-        st.caption(f"Unsupported control type: {ctype} for `{cid}`")
+        else:
+            st.caption(f"Unsupported control type: {ctype} for `{cid}`")
 
-    # Weight/Complexity selection grid (3×3)
+        if required_chain_ok:
+            required_chain_ok = _is_required_answered(ctrl, form)
+
+        if not required_chain_ok:
+            st.caption("Complete the current step to continue.")
+
+
+def _compute_and_render_totals(*, catalog: Dict, form: Dict, wc_key: str, wc_default: Tuple[int, int]) -> None:
+    policy = catalog.get("policy", {}) or {}
+
     st.markdown("#### Select Weight and Complexity Level")
-    selected_rc = render_wc_grid(key="wc_idx", size_px=360, default_rc=(2, 0))
+    selected_rc = render_wc_grid(key=wc_key, size_px=360, default_rc=wc_default)
 
-    # Resolve parts per unit
     fp_key = form.get("footprint")
     width_in, depth_in = cat.footprint_dims(catalog, fp_key) if fp_key else (None, None)
 
     resolved = pricing.resolve_parts_per_unit(catalog, form, footprint_dims=(width_in, depth_in))
 
-    # Pricing math
     qty = int(form.get("quantity", 1) or 1)
     uf = pricing.unit_factor(policy, qty)
 
@@ -223,16 +272,10 @@ def render_pdq_form() -> None:
     per_unit_after_tier = per_unit_parts_subtotal * uf
     program_base = per_unit_after_tier * qty
 
-    try:
-        markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
-    except Exception as e:
-        st.error(str(e))
-        st.stop()
-
+    markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
     final_per_unit = final_total / max(qty, 1)
 
-    # Simple range preview (your current behavior)
     min_total = program_base * 1.25
     max_total = program_base * 1.45
 
@@ -257,29 +300,71 @@ def render_pdq_form() -> None:
         unsafe_allow_html=True,
     )
 
-    # Optional: resolved parts table (debug-friendly)
-    st.markdown("#### Resolved parts (per unit)")
-    if resolved:
-        rows = []
-        for part_key, q in resolved:
-            unit_val = pricing.parts_value(catalog, part_key)
-            line = unit_val * q
-            label = catalog.get("parts", {}).get(part_key, {}).get("label", part_key)
-            rows.append({"Part": label, "Qty": q, "Unit $": f"{unit_val:,.2f}", "Line $": f"{line:,.2f}"})
-        st.table(pd.DataFrame(rows, columns=["Part", "Qty", "Unit $", "Line $"]))
-    else:
-        st.caption("Nothing resolved yet (all base values may still be 0).")
+    st.markdown(
+        "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>", unsafe_allow_html=True)
+
+# ---------- Header ----------
+st.markdown("## Select the type of display")
+
+# ---------- Rows: PDQs then Sidekicks ----------
+for cat_name in ROW_ORDER:
+    st.markdown(f"### {ROW_TITLES.get(cat_name, cat_name.title())}")
+
+    tiles = gallery.scan_category_pngs(ASSETS_ROOT, cat_name, label_overrides=LABEL_OVERRIDES)
+    if not tiles:
+        st.caption(f"No images found in `{ASSETS_ROOT}/{cat_name}`.")
+        continue
+
+    cols = st.columns(4, gap="large")
+    for i, t in enumerate(tiles[:4]):
+        with cols[i]:
+            gallery.render_tile(t, preview_w=640, preview_h=460)
+
+selected_key: Optional[str] = st.session_state.get("selected_display_key")
+
+
+# ---------- PDQ CONFIG ----------
+def render_pdq_form() -> None:
+    catalog = cat.load_catalog(CATALOG_PATH_PDQ)
+
+    st.divider()
+    st.subheader("PDQ TRAY — Configuration")
+
+    if "form" not in st.session_state:
+        st.session_state.form = {}
+    form: Dict = st.session_state.form
+
+    _render_catalog_controls(catalog=catalog, form=form, prefix="pdq")
+    _compute_and_render_totals(catalog=catalog, form=form, wc_key="wc_idx", wc_default=(2, 0))
+
+
+# ---------- SIDEKICK CONFIG ----------
+def render_sidekick_form(selected_stem: str) -> None:
+    catalog_path = f"data/catalog/{selected_stem}.json"
+    catalog = cat.load_catalog(catalog_path)
+
+    st.divider()
+    st.subheader("SIDEKICK 24 PEGGED — Configuration")
+
+    if "sidekick_form" not in st.session_state:
+        st.session_state.sidekick_form = {}
+    form: Dict = st.session_state.sidekick_form
+
+    st.markdown("<div class='pill'>Footprint: 24</div>", unsafe_allow_html=True)
+
+    _render_catalog_controls(catalog=catalog, form=form, prefix="sidekick", fixed_footprint="fp-24")
+    _compute_and_render_totals(catalog=catalog, form=form, wc_key="sidekick_wc_idx", wc_default=(2, 0))
 
 
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
     render_pdq_form()
 elif selected_key and selected_key.startswith("sidekick/"):
-    st.divider()
-    st.subheader("SIDEKICK — Configuration")
-    st.caption("Sidekick configuration coming next (we’ll wire this to data/catalog/sidekick.json).")
+    stem = selected_key.split("/", 1)[1]
+    render_sidekick_form(stem)
 elif selected_key:
     st.divider()
     st.subheader("Configuration")
