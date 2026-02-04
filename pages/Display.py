@@ -113,7 +113,7 @@ def render_wc_grid(
             transform: rotate(-90deg);
             white-space: nowrap;
             user-select: none;
-            margin-top: 28px;        /* <-- move Weight DOWN (adjust as needed) */
+            margin-top: 40px;        /* <-- move Weight DOWN (adjust as needed) */
           }}
           .wc-axis-bottom {{
             text-align: center;
