@@ -102,24 +102,28 @@ def render_wc_grid(
             border-radius: 999px;
             margin: 2px 0 8px 0;
           }}
-          .wc-axis-left {{
+            .wc-axis-left {{
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 800;
+            font-weight: 900;
+            font-size: 22px;         /* <-- bigger Weight */
             color: #111827;
             transform: rotate(-90deg);
             white-space: nowrap;
             user-select: none;
+            margin-top: 28px;        /* <-- move Weight DOWN (adjust as needed) */
           }}
           .wc-axis-bottom {{
             text-align: center;
-            font-weight: 800;
-            margin-top: 10px;
+            font-weight: 900;
+            font-size: 22px;         /* <-- bigger Complexity */
+            margin-top: 14px;        /* keep spacing nice */
             color: #111827;
             user-select: none;
           }}
+
         </style>
         """,
         unsafe_allow_html=True,
