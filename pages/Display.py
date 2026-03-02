@@ -27,7 +27,6 @@ st.markdown(
 )
 
 ASSETS_ROOT = "assets/references"
-CATALOG_PATH_PDQ = "data/catalog/pdq.json"
 
 ROW_ORDER = ["pdq", "sidekick"]
 ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks"}
@@ -37,13 +36,20 @@ LABEL_OVERRIDES = {
     "clipped_pdq_tray": "Clipped PDQ Tray",
     "digital_pdq_tray": "Angled PDQ Tray",
     "square_pdq_tray": "Square PDQ Tray",
-    "standardclub_pdq_tray": "Standard PDQ Tray",
+    "standarddclub_pdq_tray": "Standard PDQ Tray",
 
     # --- Sidekicks ---
     "sidekickpeg24": "Sidekick - Pegged 24",
     "sidekickpeg48": "Sidekick - Pegged 48",
     "sidekickshelves24": "Sidekick - Shelves 24",
     "sidekickshelves48": "Sidekick - Shelves 48",
+}
+
+PDQ_CATALOG_BY_STEM = {
+    "clipped_pdq_tray": "data/catalog/pdq_clipped.json",
+    "digital_pdq_tray": "data/catalog/pdq_angled.json",
+    "square_pdq_tray": "data/catalog/pdq_square.json",
+    "standarddclub_pdq_tray": "data/catalog/pdq_standard.json",
 }
 
 
@@ -161,7 +167,6 @@ def render_wc_grid(
     return int(rr), int(cc)
 
 
-
 def _is_required_answered(ctrl: Dict, form: Dict, *, prefix: str) -> bool:
     """
     Strict gating rules:
@@ -195,6 +200,7 @@ def _is_required_answered(ctrl: Dict, form: Dict, *, prefix: str) -> bool:
         return v >= min_v
 
     return True
+
 
 def _control_visible_for_form(ctrl_id: str, form: Dict) -> bool:
     if ctrl_id == "product_touches":
@@ -424,8 +430,9 @@ selected_key: Optional[str] = st.session_state.get("selected_display_key")
 
 
 # ---------- PDQ CONFIG ----------
-def render_pdq_form() -> None:
-    catalog = cat.load_catalog(CATALOG_PATH_PDQ)
+def render_pdq_form(selected_stem: str) -> None:
+    catalog_path = PDQ_CATALOG_BY_STEM.get(selected_stem, "data/catalog/pdq.json")
+    catalog = cat.load_catalog(catalog_path)
 
     st.divider()
     display_label = (catalog.get("meta", {}) or {}).get("display_label", "PDQ Tray")
@@ -554,9 +561,11 @@ def render_sidekick_form(selected_stem: str) -> None:
         unlocked=unlocked,
     )
 
+
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
-    render_pdq_form()
+    stem = selected_key.split("/", 1)[1]
+    render_pdq_form(stem)
 elif selected_key and selected_key.startswith("sidekick/"):
     stem = selected_key.split("/", 1)[1]
     render_sidekick_form(stem)
