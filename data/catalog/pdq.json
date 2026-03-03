@@ -38,6 +38,35 @@
           "base_value": 0,
           "dims": { "width_in": 48, "depth_in": 24 },
           "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+
+        {
+          "key": "fp-36x12x12",
+          "label": "36 × 12 × 12",
+          "base_value": 0,
+          "dims": { "width_in": 36, "depth_in": 12, "height_in": 12 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-36x17x12",
+          "label": "36 × 17 × 12",
+          "base_value": 0,
+          "dims": { "width_in": 36, "depth_in": 17, "height_in": 12 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-48x12x12",
+          "label": "48 × 12 × 12",
+          "base_value": 0,
+          "dims": { "width_in": 48, "depth_in": 12, "height_in": 12 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        },
+        {
+          "key": "fp-48x17x12",
+          "label": "48 × 17 × 12",
+          "base_value": 0,
+          "dims": { "width_in": 48, "depth_in": 17, "height_in": 12 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
         }
       ]
     },
@@ -50,7 +79,7 @@
         { "key": "header-yes", "label": "Yes", "base_value": 0 },
         { "key": "header-no", "label": "No", "base_value": 0 }
       ],
-      "notes": "If Yes is chosen, the priced part depends on footprint width: 36\" → header-36, 48\" → header-48."
+      "notes": "If Yes is chosen, the priced part depends on footprint width: 36\" → header-8in-36, 48\" → header-8in-48."
     },
     {
       "id": "divider_count",
@@ -58,7 +87,7 @@
       "type": "number",
       "required": true,
       "min": 0,
-      "notes": "Linear pricing: unit divider price × count. Auto-selects divider-12 or divider-24 by footprint depth."
+      "notes": "Linear pricing: unit divider price × count. Auto-selects divider by footprint depth (12/17/24)."
     },
     {
       "id": "shipper",
@@ -135,15 +164,78 @@
     "footprint-fp-48x12": { "label": "Footprint Base (48×12)", "base_value": 1.4 },
     "footprint-fp-36x24": { "label": "Footprint Base (36×24)", "base_value": 1.6 },
     "footprint-fp-48x24": { "label": "Footprint Base (48×24)", "base_value": 1.8 },
-    "header-36": { "label": "Header (36\")", "base_value": 0.35 },
-    "header-48": { "label": "Header (48\")", "base_value": 0.45 },
+
+    "pdq-fp-36x12x12": {
+      "label": "PDQ Base (36×12×12)",
+      "base_value": 95.25,
+      "breaks": { "1": 95.25, "100": 32.19, "200": 24.39, "500": 9.85, "1000": 6.57, "2500": 4.87, "5000": 4.3 }
+    },
+    "pdq-fp-36x17x12": {
+      "label": "PDQ Base (36×17×12)",
+      "base_value": 98.81,
+      "breaks": { "1": 98.81, "100": 33.33, "200": 25.13, "500": 11.19, "1000": 7.7, "2500": 5.93, "5000": 5.34 }
+    },
+    "pdq-fp-48x12x12": {
+      "label": "PDQ Base (48×12×12)",
+      "base_value": 97.17,
+      "breaks": { "1": 97.17, "100": 33.95, "200": 25.4, "500": 10.98, "1000": 7.52, "2500": 5.75, "5000": 5.16 }
+    },
+    "pdq-fp-48x17x12": {
+      "label": "PDQ Base (48×17×12)",
+      "base_value": 98.07,
+      "breaks": { "1": 98.07, "100": 35.54, "200": 26.37, "500": 12.02, "1000": 8.42, "2500": 6.61, "5000": 6.01 }
+    },
+
+    "header-8in-36": {
+      "label": "8\" Header (36\")",
+      "base_value": 83.05,
+      "breaks": { "1": 83.05, "100": 11.4, "200": 9.14, "500": 4.35, "1000": 2.64, "2500": 1.71, "5000": 1.4 }
+    },
+    "header-8in-48": {
+      "label": "8\" Header (48\")",
+      "base_value": 83.66,
+      "breaks": { "1": 83.66, "100": 12.31, "200": 9.65, "500": 4.83, "1000": 3.0, "2500": 2.03, "5000": 1.7 }
+    },
     "header-none": { "label": "No Header", "base_value": 0 },
-    "divider-12": { "label": "Divider (12\" depth)", "base_value": 0.08 },
+
+    "divider-12": {
+      "label": "Divider (12\" depth)",
+      "base_value": 82.57,
+      "breaks": { "1": 82.57, "100": 9.32, "200": 7.09, "500": 4.16, "1000": 2.65, "2500": 1.68, "5000": 1.14 }
+    },
+    "divider-17": {
+      "label": "Divider (17\" depth)",
+      "base_value": 82.57,
+      "breaks": { "1": 82.57, "100": 11.11, "200": 8.25, "500": 4.36, "1000": 2.65, "2500": 1.76, "5000": 1.29 }
+    },
     "divider-24": { "label": "Divider (24\" depth)", "base_value": 0.1 },
+
     "shipper-fp-36x12": { "label": "Shipper (36×12)", "base_value": 0.5 },
     "shipper-fp-48x12": { "label": "Shipper (48×12)", "base_value": 0.6 },
     "shipper-fp-36x24": { "label": "Shipper (36×24)", "base_value": 0.7 },
     "shipper-fp-48x24": { "label": "Shipper (48×24)", "base_value": 0.8 },
+
+    "shipper-fp-36x12x12": {
+      "label": "Shipper (36×12×12)",
+      "base_value": 84.53,
+      "breaks": { "1": 84.53, "100": 5.16, "200": 3.64, "500": 2.96, "1000": 2.43, "2500": 2.27, "5000": 2.21 }
+    },
+    "shipper-fp-36x17x12": {
+      "label": "Shipper (36×17×12)",
+      "base_value": 85.69,
+      "breaks": { "1": 85.69, "100": 6.9, "200": 5.08, "500": 4.34, "1000": 3.68, "2500": 3.5, "5000": 3.44 }
+    },
+    "shipper-fp-48x12x12": {
+      "label": "Shipper (48×12×12)",
+      "base_value": 85.28,
+      "breaks": { "1": 85.28, "100": 6.09, "200": 4.25, "500": 3.68, "1000": 3.09, "2500": 2.91, "5000": 2.85 }
+    },
+    "shipper-fp-48x17x12": {
+      "label": "Shipper (48×17×12)",
+      "base_value": 85.69,
+      "breaks": { "1": 85.69, "100": 6.9, "200": 5.08, "500": 4.37, "1000": 3.7, "2500": 3.52, "5000": 3.46 }
+    },
+
     "assembly-touch-unit": { "label": "Assembly Touch (per touch)", "base_value": 0.12 }
   },
   "rules": {
@@ -153,7 +245,12 @@
         "fp-36x12": "footprint-fp-36x12",
         "fp-48x12": "footprint-fp-48x12",
         "fp-36x24": "footprint-fp-36x24",
-        "fp-48x24": "footprint-fp-48x24"
+        "fp-48x24": "footprint-fp-48x24",
+
+        "fp-36x12x12": "pdq-fp-36x12x12",
+        "fp-36x17x12": "pdq-fp-36x17x12",
+        "fp-48x12x12": "pdq-fp-48x12x12",
+        "fp-48x17x12": "pdq-fp-48x17x12"
       }
     },
     "resolve_header": {
@@ -161,14 +258,14 @@
       "when_value": "header-yes",
       "based_on_control": "footprint",
       "match_on_dim": "width_in",
-      "map": { "36": "header-36", "48": "header-48" },
+      "map": { "36": "header-8in-36", "48": "header-8in-48" },
       "else": "header-none"
     },
     "resolve_dividers": {
       "quantity_control": "divider_count",
       "based_on_control": "footprint",
       "match_on_dim": "depth_in",
-      "map": { "12": "divider-12", "24": "divider-24" },
+      "map": { "12": "divider-12", "17": "divider-17", "24": "divider-24" },
       "else": null,
       "pricing": "linear"
     },
@@ -180,7 +277,12 @@
         "fp-36x12": "shipper-fp-36x12",
         "fp-48x12": "shipper-fp-48x12",
         "fp-36x24": "shipper-fp-36x24",
-        "fp-48x24": "shipper-fp-48x24"
+        "fp-48x24": "shipper-fp-48x24",
+
+        "fp-36x12x12": "shipper-fp-36x12x12",
+        "fp-36x17x12": "shipper-fp-36x17x12",
+        "fp-48x12x12": "shipper-fp-48x12x12",
+        "fp-48x17x12": "shipper-fp-48x17x12"
       },
       "else": null
     },
@@ -200,14 +302,7 @@
       [0.3, 0.35, 0.4],
       [0.25, 0.3, 0.35]
     ],
-    "unit_tiers": [
-      { "min_qty": 1, "max_qty": 199, "factor": 1.0 },
-      { "min_qty": 200, "max_qty": 499, "factor": 0.98 },
-      { "min_qty": 500, "max_qty": 999, "factor": 0.96 },
-      { "min_qty": 1000, "max_qty": 1999, "factor": 0.94 },
-      { "min_qty": 2000, "max_qty": 2999, "factor": 0.92 },
-      { "min_qty": 3000, "max_qty": null, "factor": 0.9 }
-    ],
+   
     "tier_boundary": "inclusive",
     "display_weight_round": 0.01,
     "markup_application": "program_total"

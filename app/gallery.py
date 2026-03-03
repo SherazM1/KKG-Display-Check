@@ -100,11 +100,8 @@ def fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.
 
 def render_tile(tile: OptionTile, *, preview_w: int = 640, preview_h: int = 460) -> None:
     """Render one tile with image + label + Select button."""
-    st.markdown('<div class="kkg-tile">', unsafe_allow_html=True)
     st.image(fixed_preview(tile.path, target_w=preview_w, target_h=preview_h), use_container_width=True)
     st.markdown(f"<div class='kkg-label'>{tile.label}</div>", unsafe_allow_html=True)
 
     if st.button("Select", key=f"select_{tile.key}", use_container_width=True):
         st.session_state.selected_display_key = tile.key
-
-    st.markdown("</div>", unsafe_allow_html=True)

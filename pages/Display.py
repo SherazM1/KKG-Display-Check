@@ -54,10 +54,10 @@ LABEL_OVERRIDES = {
 }
 
 PDQ_CATALOG_BY_STEM = {
-    "clipped_pdq_tray": "data/catalog/pdq_clipped.json",
-    "digital_pdq_tray": "data/catalog/pdq_angled.json",
-    "square_pdq_tray": "data/catalog/pdq_square.json",
-    "standardclub_pdq_tray": "data/catalog/pdq_standard.json",
+    "clipped_pdq_tray": "data/catalog/pdq.json",
+    "digital_pdq_tray": "data/catalog/pdq.json",
+    "square_pdq_tray": "data/catalog/pdq.json",
+    "standardclub_pdq_tray": "data/catalog/pdq.json",
 }
 
 
@@ -377,12 +377,12 @@ def _compute_and_render_totals(
     resolved = pricing.resolve_parts_per_unit(catalog, form, footprint_dims=(width_in, depth_in))
 
     qty = int(form.get("quantity", 1) or 1)
-    uf = pricing.unit_factor(policy, qty)
 
-    per_unit_parts_subtotal = sum(pricing.parts_value(catalog, part_key) * q for part_key, q in resolved)
-    per_unit_after_tier = per_unit_parts_subtotal * uf
-    program_base = per_unit_after_tier * qty
-
+    per_unit_parts_subtotal = sum(
+    pricing.parts_value(catalog, part_key, program_qty=qty) * q
+    for part_key, q in resolved
+)
+    program_base = per_unit_parts_subtotal * qty
     markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
     final_per_unit = final_total / max(qty, 1)
