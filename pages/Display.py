@@ -28,8 +28,8 @@ st.markdown(
 
 ASSETS_ROOT = "assets/references"
 
-ROW_ORDER = ["pdq", "sidekick", "half pallet", "dump bin"]
-ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks", "half pallet": "Half Pallets", "dump bin": "Dump Bins"}
+ROW_ORDER = ["pdq", "sidekick", "halfpallet", "dumpbin"]
+ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks", "halfpallet": "Half Pallets", "dumpbin": "Dump Bins"}
 
 LABEL_OVERRIDES = {
     # --- PDQs (order doesn't matter; mapping by filename stem) ---
