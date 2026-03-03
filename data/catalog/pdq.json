@@ -11,34 +11,6 @@
       "type": "single",
       "required": true,
       "options": [
-        {
-          "key": "fp-36x12",
-          "label": "36 × 12",
-          "base_value": 0,
-          "dims": { "width_in": 36, "depth_in": 12 },
-          "rules": { "header_allowed": true, "shipper_allowed": true }
-        },
-        {
-          "key": "fp-48x12",
-          "label": "48 × 12",
-          "base_value": 0,
-          "dims": { "width_in": 48, "depth_in": 12 },
-          "rules": { "header_allowed": true, "shipper_allowed": true }
-        },
-        {
-          "key": "fp-36x24",
-          "label": "36 × 24",
-          "base_value": 0,
-          "dims": { "width_in": 36, "depth_in": 24 },
-          "rules": { "header_allowed": true, "shipper_allowed": true }
-        },
-        {
-          "key": "fp-48x24",
-          "label": "48 × 24",
-          "base_value": 0,
-          "dims": { "width_in": 48, "depth_in": 24 },
-          "rules": { "header_allowed": true, "shipper_allowed": true }
-        },
 
         {
           "key": "fp-36x12x12",
