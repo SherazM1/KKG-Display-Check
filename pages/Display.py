@@ -46,8 +46,8 @@ LABEL_OVERRIDES = {
 
 
     # --- Half Pallets --- 
-    "frontfaced_hp": "Front-faced Half Pallet",
-    "threesided_hp": "Three-sided Half Pallet",
+    "frontfaced_hp": "Front-Faced Half Pallet",
+    "threesided_hp": "Three-Sided Half Pallet",
 
     # --- Dump Bins ---
     "dump_bin": "Half Pallet Dump Bin",
@@ -436,6 +436,148 @@ for cat_name in ROW_ORDER:
 
 selected_key: Optional[str] = st.session_state.get("selected_display_key")
 
+def _generic_catalog_for_selected_tile(
+    *,
+    category: str,
+    stem: str,
+    label: str,
+    hero_image: str,
+) -> Dict:
+    """
+    Minimal catalog that works with _render_catalog_controls + _compute_and_render_totals.
+    Prices are placeholders (0) until real dictionaries exist.
+    """
+    return {
+        "meta": {
+            "category": category,
+            "display_label": label,
+            "hero_image": hero_image,
+            "id": f"{category}-{stem}",
+        },
+        "controls": [
+            {
+                "id": "footprint",
+                "label": "Footprint",
+                "type": "single",
+                "required": True,
+                "options": [
+                    {
+                        "key": "fp-generic",
+                        "label": "Generic",
+                        "base_value": 0,
+                        "dims": {"width_in": 24, "depth_in": 24},
+                        "rules": {"header_allowed": True, "shipper_allowed": True},
+                    }
+                ],
+                "notes": "Placeholder until parts are defined.",
+            },
+            {
+                "id": "header",
+                "label": "Header",
+                "type": "single",
+                "required": True,
+                "options": [
+                    {"key": "header-yes", "label": "Yes", "base_value": 0},
+                    {"key": "header-no", "label": "No", "base_value": 0},
+                ],
+                "notes": "Placeholder switch.",
+            },
+            {
+                "id": "shipper",
+                "label": "Shipper",
+                "type": "single",
+                "required": True,
+                "options": [
+                    {"key": "shipper-yes", "label": "Yes", "base_value": 0},
+                    {"key": "shipper-no", "label": "No", "base_value": 0},
+                ],
+                "notes": "Placeholder switch.",
+            },
+            {
+                "id": "assembly",
+                "label": "Assembly",
+                "type": "single",
+                "required": True,
+                "options": [
+                    {"key": "assembly-kdf", "label": "KDF", "base_value": 0},
+                    {"key": "assembly-turnkey", "label": "Turnkey", "base_value": 0},
+                ],
+                "notes": "Placeholder switch.",
+            },
+            {
+                "id": "product_touches",
+                "label": "Product Touches",
+                "type": "number",
+                "required": False,
+                "min": 0,
+                "notes": "Placeholder; only used when Assembly = Turnkey.",
+            },
+            {
+                "id": "quantity",
+                "label": "Quantity",
+                "type": "number",
+                "required": True,
+                "min": 1,
+                "notes": "Used for unit tiers and program total.",
+            },
+        ],
+        "parts": {
+            "footprint-fp-generic": {"label": f"{label} Base", "base_value": 0},
+            "header-unit": {"label": "Header", "base_value": 0},
+            "header-none": {"label": "No Header", "base_value": 0},
+            "shipper-unit": {"label": "Shipper", "base_value": 0},
+            "assembly-touch-unit": {"label": "Assembly Touch (per touch)", "base_value": 0},
+        },
+        "rules": {
+            "resolve_footprint_base": {
+                "based_on_control": "footprint",
+                "map": {"fp-generic": "footprint-fp-generic"},
+            },
+            "resolve_header": {
+                "when_control": "header",
+                "when_value": "header-yes",
+                "based_on_control": "footprint",
+                "match_on_dim": "width_in",
+                "map": {"24": "header-unit"},
+                "else": "header-none",
+            },
+            "resolve_shipper": {
+                "when_control": "shipper",
+                "when_value": "shipper-yes",
+                "based_on_control": "footprint",
+                "map": {"fp-generic": "shipper-unit"},
+                "else": None,
+            },
+            "resolve_assembly_touches": {
+                "when_control": "assembly",
+                "when_value": "assembly-turnkey",
+                "quantity_control": "product_touches",
+                "min_quantity": 1,
+                "part": "assembly-touch-unit",
+                "pricing": "linear",
+                "else": None,
+            },
+        },
+        "policy": {
+            "matrix_markups": [
+                [0.35, 0.4, 0.45],
+                [0.3, 0.35, 0.4],
+                [0.25, 0.3, 0.35],
+            ],
+            "unit_tiers": [
+                {"min_qty": 1, "max_qty": 199, "factor": 1.0},
+                {"min_qty": 200, "max_qty": 499, "factor": 0.98},
+                {"min_qty": 500, "max_qty": 999, "factor": 0.96},
+                {"min_qty": 1000, "max_qty": 1999, "factor": 0.94},
+                {"min_qty": 2000, "max_qty": 2999, "factor": 0.92},
+                {"min_qty": 3000, "max_qty": None, "factor": 0.9},
+            ],
+            "tier_boundary": "inclusive",
+            "display_weight_round": 0.01,
+            "markup_application": "program_total",
+        },
+    }
+
 
 # ---------- PDQ CONFIG ----------
 def render_pdq_form(selected_stem: str) -> None:
@@ -569,20 +711,68 @@ def render_sidekick_form(selected_stem: str) -> None:
         unlocked=unlocked,
     )
 
+def _selected_tile_meta(selected_key: str) -> Tuple[str, str, str, str]:
+    """
+    Returns (category, stem, label, hero_image) for the selected tile.
+    """
+    category, stem = selected_key.split("/", 1)
+    label = LABEL_OVERRIDES.get(stem, stem.replace("_", " ").replace("-", " ").title())
+    hero_image = f"{ASSETS_ROOT}/{category}/{stem}.png"
+    return category, stem, label, hero_image
 
+
+def render_generic_display_form(*, selected_key: str, prefix: str) -> None:
+    category, stem, label, hero_image = _selected_tile_meta(selected_key)
+
+    catalog = _generic_catalog_for_selected_tile(
+        category=category,
+        stem=stem,
+        label=label,
+        hero_image=hero_image,
+    )
+
+    st.divider()
+    st.subheader(f"{label.upper()} — Configuration")
+    st.caption("Placeholder configuration until pricing dictionaries are created.")
+
+    state_key = f"{prefix}_form"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = {}
+    form: Dict = st.session_state[state_key]
+
+    unlocked = _render_catalog_controls(catalog=catalog, form=form, prefix=prefix)
+
+    _compute_and_render_totals(
+        catalog=catalog,
+        form=form,
+        wc_key=f"{prefix}_wc_idx",
+        wc_default=(2, 0),
+        unlocked=unlocked,
+    )
+
+
+
+# ---------- Router ----------
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
     stem = selected_key.split("/", 1)[1]
     render_pdq_form(stem)
+
 elif selected_key and selected_key.startswith("sidekick/"):
     stem = selected_key.split("/", 1)[1]
     render_sidekick_form(stem)
+
+elif selected_key and (
+    selected_key.startswith("halfpallet/")
+    or selected_key.startswith("dumpbin/")
+):
+    # Generic placeholder config for now (no JSON dictionaries yet)
+    prefix = selected_key.split("/", 1)[0]
+    render_generic_display_form(selected_key=selected_key, prefix=prefix)
+
 elif selected_key:
     st.divider()
     st.subheader("Configuration")
     st.caption("Fields for this display type will be added soon.")
 else:
     st.caption("Select a display above to configure its details.")
-
-st.divider()
-st.page_link("Home.py", label="Back to Home", icon="🏠")
