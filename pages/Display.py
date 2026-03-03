@@ -49,7 +49,7 @@ PDQ_CATALOG_BY_STEM = {
     "clipped_pdq_tray": "data/catalog/pdq_clipped.json",
     "digital_pdq_tray": "data/catalog/pdq_angled.json",
     "square_pdq_tray": "data/catalog/pdq_square.json",
-    "standarddclub_pdq_tray": "data/catalog/pdq_standard.json",
+    "standardclub_pdq_tray": "data/catalog/pdq_standard.json",
 }
 
 
