@@ -95,11 +95,7 @@ def fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.
     img = Image.open(path).convert("RGBA")
     img = _autocrop_foreground(img, bg_rgb=(255, 255, 255), threshold=12)
     contained = ImageOps.contain(img, (target_w, target_h))
-    canvas = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 0))
-    x = (target_w - contained.width) // 2
-    y = 0  # top-align removes the “bar” above
-    canvas.paste(contained, (x, y), contained)
-    return canvas
+    return ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
 
 
 def render_tile(tile: OptionTile, *, preview_w: int = 640, preview_h: int = 460) -> None:
