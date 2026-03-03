@@ -378,10 +378,24 @@ def _compute_and_render_totals(
 
     qty = int(form.get("quantity", 1) or 1)
 
+    def _parts_value_with_qty(part_key: str) -> float:
+        """
+        Backward-compatible call path:
+        - Prefer break-aware pricing via `program_qty`.
+        - Fallback for older pricing modules that don't accept this kwarg.
+        """
+        try:
+            return float(pricing.parts_value(catalog, part_key, program_qty=qty))
+        except TypeError as exc:
+            msg = str(exc)
+            if "program_qty" in msg and "unexpected keyword" in msg:
+                return float(pricing.parts_value(catalog, part_key))
+            raise
+
     per_unit_parts_subtotal = sum(
-    pricing.parts_value(catalog, part_key, program_qty=qty) * q
-    for part_key, q in resolved
-)
+        _parts_value_with_qty(part_key) * q
+        for part_key, q in resolved
+    )
     program_base = per_unit_parts_subtotal * qty
     markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
