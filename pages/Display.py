@@ -36,7 +36,7 @@ LABEL_OVERRIDES = {
     "clipped_pdq_tray": "Clipped PDQ Tray",
     "digital_pdq_tray": "Angled PDQ Tray",
     "square_pdq_tray": "Square PDQ Tray",
-    "standarddclub_pdq_tray": "Standard PDQ Tray",
+    "standardclub_pdq_tray": "Standard PDQ Tray",
 
     # --- Sidekicks ---
     "sidekickpeg24": "Sidekick - Pegged 24",
