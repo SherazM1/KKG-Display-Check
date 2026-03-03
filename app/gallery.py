@@ -95,7 +95,7 @@ def fixed_preview(path: str, target_w: int = 640, target_h: int = 460) -> Image.
     img = Image.open(path).convert("RGBA")
     img = _autocrop_foreground(img, bg_rgb=(255, 255, 255), threshold=12)
     contained = ImageOps.contain(img, (target_w, target_h))
-    return ImageOps.pad(contained, (target_w, target_h), color=(0, 0, 0, 0))
+    return ImageOps.pad(contained, (target_w, target_h), color=(255, 255, 255, 255))
 
 
 def render_tile(tile: OptionTile, *, preview_w: int = 640, preview_h: int = 460) -> None:

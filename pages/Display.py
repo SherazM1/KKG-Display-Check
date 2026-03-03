@@ -28,8 +28,8 @@ st.markdown(
 
 ASSETS_ROOT = "assets/references"
 
-ROW_ORDER = ["pdq", "sidekick"]
-ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks"}
+ROW_ORDER = ["pdq", "sidekick", "half pallet", "dump bin"]
+ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks", "half pallet": "Half Pallets", "dump bin": "Dump Bins"}
 
 LABEL_OVERRIDES = {
     # --- PDQs (order doesn't matter; mapping by filename stem) ---
@@ -43,6 +43,14 @@ LABEL_OVERRIDES = {
     "sidekickpeg48": "Sidekick - Pegged 48",
     "sidekickshelves24": "Sidekick - Shelves 24",
     "sidekickshelves48": "Sidekick - Shelves 48",
+
+
+    # --- Half Pallets --- 
+    "frontfaced_hp": "Front-faced Half Pallet",
+    "threesided_hp": "Three-sided Half Pallet",
+
+    # --- Dump Bins ---
+    "dump_bin": "Half Pallet Dump Bin",
 }
 
 PDQ_CATALOG_BY_STEM = {
