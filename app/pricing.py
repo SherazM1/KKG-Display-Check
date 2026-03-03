@@ -60,19 +60,47 @@ def _floor_break_price(part_spec: Dict, *, program_qty: int) -> float:
     return _as_float(part_spec.get("base_value", 0.0), 0.0)
 
 
-def parts_value(catalog: Dict, part_key: str, *, program_qty: int) -> float:
+def parts_value(catalog: Dict, part_key: str, *, program_qty: int | None = None, **_ignored) -> float:
     """
-    Returns per-unit price for `part_key` at `program_qty`.
-
-    Uses per-part `breaks` (FLOOR selection) when present.
-    Falls back to `base_value` for backwards compatibility.
+    Break-aware part pricing:
+      - Uses per-part `breaks` (FLOOR selection) when present.
+      - Falls back to `base_value`.
+    `program_qty` is the order quantity; required for `breaks`.
     """
     try:
-        parts = catalog.get("parts", {}) or {}
-        part_spec = parts.get(part_key, {}) or {}
+        part_spec = (catalog.get("parts", {}) or {}).get(part_key, {}) or {}
         if not isinstance(part_spec, dict):
             return 0.0
-        return float(_floor_break_price(part_spec, program_qty=int(program_qty)))
+
+        qty = int(program_qty or 1)
+
+        breaks = part_spec.get("breaks")
+        if isinstance(breaks, dict) and breaks:
+            parsed: List[Tuple[int, float]] = []
+            for k, v in breaks.items():
+                try:
+                    bq = int(k)
+                except Exception:
+                    continue
+                try:
+                    price = float(v or 0)
+                except Exception:
+                    price = 0.0
+                parsed.append((bq, price))
+
+            if parsed:
+                parsed.sort(key=lambda x: x[0])
+                floor_price = None
+                for bq, price in parsed:
+                    if bq <= qty:
+                        floor_price = price
+                    else:
+                        break
+                if floor_price is not None:
+                    return float(floor_price)
+                return float(parsed[0][1])
+
+        return float(part_spec.get("base_value", 0) or 0)
     except Exception:
         return 0.0
 
