@@ -377,6 +377,15 @@ def _compute_and_render_totals(
     resolved = pricing.resolve_parts_per_unit(catalog, form, footprint_dims=(width_in, depth_in))
 
     qty = int(form.get("quantity", 1) or 1)
+    st.write("DEBUG resolved:", resolved)
+    st.write("DEBUG qty:", qty)
+
+    priced = [(pk, q, pricing.parts_value(catalog, pk, program_qty=qty)) for pk, q in resolved]
+    st.write("DEBUG per-part prices:", priced)
+
+    per_unit_subtotal = sum(p * q for _, q, p in priced)
+    st.write("DEBUG per-unit subtotal:", per_unit_subtotal)
+    st.write("DEBUG program_base:", per_unit_subtotal * qty)
 
     def _parts_value_with_qty(part_key: str) -> float:
         """
