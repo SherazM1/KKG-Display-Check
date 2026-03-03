@@ -606,6 +606,9 @@ def _generic_catalog_for_selected_tile(
 def render_pdq_form(selected_stem: str) -> None:
     catalog_path = PDQ_CATALOG_BY_STEM.get(selected_stem, "data/catalog/pdq.json")
     catalog = cat.load_catalog(catalog_path)
+    st.write("DEBUG smoothing policy:", ((catalog.get("policy", {}) or {}).get("break_pricing", {}) or {}).get("sub_100_smoothing", {}))
+    st.write("DEBUG pdq derived:", ((cat.get("parts", {}) or {}).get("pdq-fp-36x12x12", {}) or {}).get("derived_breaks"))
+    st.write("DEBUG qty99 pdq price:", pricing.parts_value(catalog, "pdq-fp-36x12x12", program_qty=99))
 
     st.divider()
     display_label = (catalog.get("meta", {}) or {}).get("display_label", "PDQ Tray")
