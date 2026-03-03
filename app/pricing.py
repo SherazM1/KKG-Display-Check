@@ -18,89 +18,121 @@ def _as_int(value: object, default: int = 0) -> int:
         return int(default)
 
 
-def _floor_break_price(part_spec: Dict, *, program_qty: int) -> float:
+def _round_money(value: float) -> float:
+    # Prevents float artifacts; rounds to cents as required.
+    return round(float(value) + 1e-9, 2)
+
+
+def _parse_breaks_map(breaks: object) -> List[Tuple[int, float]]:
+    if not isinstance(breaks, dict):
+        return []
+    parsed: List[Tuple[int, float]] = []
+    for k, v in breaks.items():
+        try:
+            bq = int(k)
+        except Exception:
+            continue
+        parsed.append((bq, _as_float(v, 0.0)))
+    parsed.sort(key=lambda x: x[0])
+    return parsed
+
+
+def _floor_from_parsed_breaks(parsed: List[Tuple[int, float]], qty: int) -> float:
+    if not parsed:
+        return 0.0
+
+    qty_i = max(_as_int(qty, 0), 0)
+    floor_price = None
+    for bq, price in parsed:
+        if bq <= qty_i:
+            floor_price = price
+        else:
+            break
+
+    if floor_price is not None:
+        return float(floor_price)
+
+    return float(parsed[0][1])
+
+
+def _sub100_smoothing_enabled(catalog: Dict) -> bool:
+    policy = catalog.get("policy", {}) or {}
+    bp = policy.get("break_pricing", {}) or {}
+    sub = bp.get("sub_100_smoothing", {}) or {}
+    return bool(sub.get("enabled", False))
+
+
+def _effective_breaks_for_part(catalog: Dict, part_spec: Dict, qty: int) -> Dict | None:
     """
-    Returns per-unit price for a part at a given program quantity using FLOOR breakpoint.
+    Returns an effective breaks dict for pricing selection.
 
-    - If `part_spec.breaks` exists: choose largest break_qty <= program_qty.
-      If program_qty is below smallest breakpoint, use the smallest breakpoint.
-    - Else fall back to `part_spec.base_value`.
-
-    Expected breaks shape:
-      {"1": 97.17, "100": 33.95, ...} (keys may be str or int)
+    - If qty < 100 and smoothing enabled:
+        uses {1,25,50,75,100} where:
+          1 & 100 come from raw breaks
+          25/50/75 come from derived_breaks.tiers
+      Guardrail: raw breaks must include both "1" and "100".
+    - Else: returns raw breaks.
     """
-    qty = max(_as_int(program_qty, 0), 0)
-    breaks = part_spec.get("breaks")
+    raw_breaks = part_spec.get("breaks")
+    if not isinstance(raw_breaks, dict) or not raw_breaks:
+        return None
 
-    if isinstance(breaks, dict) and breaks:
-        parsed: List[Tuple[int, float]] = []
-        for k, v in breaks.items():
-            try:
-                bq = int(k)
-            except Exception:
-                continue
-            parsed.append((bq, _as_float(v, 0.0)))
+    if qty >= 100:
+        return raw_breaks
 
-        if parsed:
-            parsed.sort(key=lambda x: x[0])
+    if not _sub100_smoothing_enabled(catalog):
+        return raw_breaks
 
-            floor_price = None
-            for bq, price in parsed:
-                if bq <= qty:
-                    floor_price = price
-                else:
-                    break
+    # Guardrail: require real anchors
+    if "1" not in raw_breaks or "100" not in raw_breaks:
+        return raw_breaks
 
-            if floor_price is not None:
-                return float(floor_price)
+    derived = part_spec.get("derived_breaks", {}) or {}
+    tiers = (derived.get("tiers", {}) or {}) if isinstance(derived, dict) else {}
+    if not isinstance(tiers, dict) or not tiers:
+        return raw_breaks
 
-            # qty below smallest break -> use smallest
-            return float(parsed[0][1])
+    effective: Dict[str, float] = {
+        "1": _as_float(raw_breaks.get("1"), 0.0),
+        "100": _as_float(raw_breaks.get("100"), 0.0),
+    }
 
-    return _as_float(part_spec.get("base_value", 0.0), 0.0)
+    # Only include defined tiers; missing ones won't break selection.
+    for k in ("25", "50", "75"):
+        if k in tiers:
+            effective[k] = _as_float(tiers.get(k), 0.0)
+
+    # If we didn't add any mid-tiers, there's nothing to smooth.
+    if not any(k in effective for k in ("25", "50", "75")):
+        return raw_breaks
+
+    return effective
 
 
 def parts_value(catalog: Dict, part_key: str, *, program_qty: int | None = None, **_ignored) -> float:
     """
-    Break-aware part pricing:
-      - Uses per-part `breaks` (FLOOR selection) when present.
-      - Falls back to `base_value`.
-    `program_qty` is the order quantity; required for `breaks`.
+    Per-unit part price at program quantity.
+
+    - Uses derived exponential tiers for qty < 100 when enabled in policy and available on part.
+    - Uses raw breaks (floor) for qty >= 100.
+    - Falls back to base_value when no breaks exist.
+    - Always returns dollars rounded to cents.
     """
     try:
-        part_spec = (catalog.get("parts", {}) or {}).get(part_key, {}) or {}
+        parts = catalog.get("parts", {}) or {}
+        part_spec = parts.get(part_key, {}) or {}
         if not isinstance(part_spec, dict):
             return 0.0
 
-        qty = int(program_qty or 1)
+        qty = max(_as_int(program_qty or 1, 1), 1)
 
-        breaks = part_spec.get("breaks")
-        if isinstance(breaks, dict) and breaks:
-            parsed: List[Tuple[int, float]] = []
-            for k, v in breaks.items():
-                try:
-                    bq = int(k)
-                except Exception:
-                    continue
-                try:
-                    price = float(v or 0)
-                except Exception:
-                    price = 0.0
-                parsed.append((bq, price))
-
+        effective_breaks = _effective_breaks_for_part(catalog, part_spec, qty)
+        if effective_breaks is not None:
+            parsed = _parse_breaks_map(effective_breaks)
             if parsed:
-                parsed.sort(key=lambda x: x[0])
-                floor_price = None
-                for bq, price in parsed:
-                    if bq <= qty:
-                        floor_price = price
-                    else:
-                        break
-                if floor_price is not None:
-                    return float(floor_price)
-                return float(parsed[0][1])
+                return _round_money(_floor_from_parsed_breaks(parsed, qty))
 
-        return float(part_spec.get("base_value", 0) or 0)
+        return _round_money(_as_float(part_spec.get("base_value", 0.0), 0.0))
     except Exception:
         return 0.0
 
@@ -153,13 +185,20 @@ def resolve_parts_per_unit(
         if part:
             resolved.append((part, 1))
 
-    # dividers (also used for sidekick pegs via quantity_control)
+    # dividers (PDQ: optionally map by footprint; Sidekick: still maps by depth_in)
     if "resolve_dividers" in rules:
         r = rules["resolve_dividers"]
         qty_ctrl = r.get("quantity_control")
         dqty = _as_int(form.get(qty_ctrl, 0), 0)
-        if dqty > 0 and r.get("match_on_dim") == "depth_in" and depth_in is not None:
-            part = (r.get("map", {}) or {}).get(str(depth_in), r.get("else"))
+
+        if dqty > 0:
+            part = None
+            if r.get("map_by") == "footprint" and fp_key:
+                part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+            else:
+                if r.get("match_on_dim") == "depth_in" and depth_in is not None:
+                    part = (r.get("map", {}) or {}).get(str(depth_in), r.get("else"))
+
             if part:
                 resolved.append((part, int(dqty)))
 
