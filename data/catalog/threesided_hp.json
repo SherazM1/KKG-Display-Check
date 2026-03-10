@@ -1,0 +1,221 @@
+{
+  "meta": {
+    "category": "halfpallet",
+    "display_label": "Three-Sided Half Pallet",
+    "hero_image": "assets/references/halfpallet/threesided_hp.png"
+  },
+  "controls": [
+    {
+      "id": "footprint",
+      "label": "Footprint",
+      "type": "single",
+      "required": true,
+      "options": [
+        {
+          "key": "fp-24x48",
+          "label": "24 × 48",
+          "base_value": 0,
+          "dims": { "width_in": 24, "depth_in": 48, "height_in": 48 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        }
+      ],
+      "notes": "Half pallet footprint is fixed (24×48). Height placeholder; adjust later if needed."
+    },
+    {
+      "id": "display_body",
+      "label": "Display Body Construction",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "body-2same-1base", "label": "2 Same Sides + 1 Base", "base_value": 0 },
+        { "key": "body-3diff", "label": "3 Different Sized Pieces", "base_value": 0 }
+      ],
+      "notes": "Placeholder options to support different construction/BOM mappings later."
+    },
+    {
+      "id": "header",
+      "label": "Header / Topper",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "header-yes", "label": "Yes", "base_value": 0 },
+        { "key": "header-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "If Yes, resolves to the topper/header kit part for this display."
+    },
+    {
+      "id": "shelf_count",
+      "label": "Number of Shelves",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Linear pricing: shelf unit × count."
+    },
+    {
+      "id": "divider_count",
+      "label": "Number of Dividers",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Linear pricing: divider unit × count."
+    },
+    {
+      "id": "shipper",
+      "label": "Shipper",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "shipper-yes", "label": "Yes", "base_value": 0 },
+        { "key": "shipper-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "Per-unit shipper; if Yes, resolves to a footprint-specific part."
+    },
+    {
+      "id": "assembly",
+      "label": "Assembly",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "assembly-kdf", "label": "KDF", "base_value": 0 },
+        { "key": "assembly-turnkey", "label": "Turnkey", "base_value": 0 }
+      ],
+      "notes": "KDF/Turnkey are non-priced switches; only Turnkey with touches adds cost."
+    },
+    {
+      "id": "product_touches",
+      "label": "Product Touches",
+      "type": "number",
+      "required": false,
+      "min": 0,
+      "notes": "Only used when Assembly = Turnkey; cost = touch unit × touches."
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "notes": "Used for break pricing (floor) and program total."
+    }
+  ],
+  "parts": {
+    "hp3-base-fp-24x48": {
+      "label": "Three-Sided Half Pallet Base (24×48)",
+      "base_value": 0
+    },
+
+    "hp3-body-2same-1base": {
+      "label": "Display Body — 2 Same Sides + 1 Base",
+      "base_value": 0
+    },
+    "hp3-body-3diff": {
+      "label": "Display Body — 3 Different Sized Pieces",
+      "base_value": 0
+    },
+
+    "hp3-shelf-unit": {
+      "label": "Shelf (per shelf)",
+      "base_value": 0
+    },
+    "hp3-divider-unit": {
+      "label": "Divider (per divider)",
+      "base_value": 0
+    },
+
+    "hp3-header": {
+      "label": "Header / Topper Kit",
+      "base_value": 0
+    },
+    "header-none": {
+      "label": "No Header / Topper",
+      "base_value": 0
+    },
+
+    "hp3-shipper-fp-24x48": {
+      "label": "Shipper (24×48)",
+      "base_value": 0
+    },
+
+    "assembly-touch-unit": {
+      "label": "Assembly Touch (per touch)",
+      "base_value": 0.12
+    }
+  },
+  "rules": {
+    "resolve_footprint_base": {
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hp3-base-fp-24x48"
+      }
+    },
+    "resolve_display_body": {
+      "based_on_control": "display_body",
+      "map": {
+        "body-2same-1base": "hp3-body-2same-1base",
+        "body-3diff": "hp3-body-3diff"
+      }
+    },
+    "resolve_header": {
+      "when_control": "header",
+      "when_value": "header-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hp3-header"
+      },
+      "else": "header-none"
+    },
+    "resolve_shelves": {
+      "quantity_control": "shelf_count",
+      "map_by": "footprint",
+      "map": {
+        "fp-24x48": "hp3-shelf-unit"
+      },
+      "else": null,
+      "pricing": "linear"
+    },
+    "resolve_dividers": {
+      "quantity_control": "divider_count",
+      "map_by": "footprint",
+      "map": {
+        "fp-24x48": "hp3-divider-unit"
+      },
+      "else": null,
+      "pricing": "linear"
+    },
+    "resolve_shipper": {
+      "when_control": "shipper",
+      "when_value": "shipper-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hp3-shipper-fp-24x48"
+      },
+      "else": null
+    },
+    "resolve_assembly_touches": {
+      "when_control": "assembly",
+      "when_value": "assembly-turnkey",
+      "quantity_control": "product_touches",
+      "min_quantity": 1,
+      "part": "assembly-touch-unit",
+      "pricing": "linear",
+      "else": null
+    }
+  },
+  "policy": {
+    "matrix_markups": [
+      [0.35, 0.4, 0.45],
+      [0.3, 0.35, 0.4],
+      [0.25, 0.3, 0.35]
+    ],
+    "break_pricing": {
+      "selection": "floor",
+      "sub_100_smoothing": {
+        "enabled": true,
+        "method": "exponential",
+        "tiers": [1, 25, 50, 75, 100]
+      }
+    },
+    "display_weight_round": 0.01,
+    "markup_application": "program_total"
+  }
+}

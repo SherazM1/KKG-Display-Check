@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "category": "dumpbin",
+    "display_label": "Half Pallet Dump Bin",
+    "hero_image": "assets/references/dumpbin/dump_bin.png"
+  },
+  "controls": [
+    {
+      "id": "footprint",
+      "label": "Footprint",
+      "type": "single",
+      "required": true,
+      "options": [
+        {
+          "key": "fp-24x48",
+          "label": "24 × 48",
+          "base_value": 0,
+          "dims": { "width_in": 24, "depth_in": 48, "height_in": 48 },
+          "rules": { "header_allowed": true, "shipper_allowed": true }
+        }
+      ],
+      "notes": "Half pallet footprint is fixed (24×48). Height placeholder; adjust later if needed."
+    },
+    {
+      "id": "header",
+      "label": "Header / Sign",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "header-yes", "label": "Yes", "base_value": 0 },
+        { "key": "header-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "If Yes, resolves to the header/sign kit part for this dump bin."
+    },
+    {
+      "id": "divider_count",
+      "label": "Number of Dividers",
+      "type": "number",
+      "required": true,
+      "min": 0,
+      "notes": "Linear pricing: divider unit × count."
+    },
+    {
+      "id": "support_riser",
+      "label": "Support Riser",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "riser-yes", "label": "Yes", "base_value": 0 },
+        { "key": "riser-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "If Yes, adds the support riser part."
+    },
+    {
+      "id": "false_bottom",
+      "label": "False Bottom",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "falsebottom-yes", "label": "Yes", "base_value": 0 },
+        { "key": "falsebottom-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "If Yes, adds the false bottom part."
+    },
+    {
+      "id": "shipper",
+      "label": "Shipper",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "shipper-yes", "label": "Yes", "base_value": 0 },
+        { "key": "shipper-no", "label": "No", "base_value": 0 }
+      ],
+      "notes": "Per-unit shipper; if Yes, resolves to a footprint-specific part."
+    },
+    {
+      "id": "assembly",
+      "label": "Assembly",
+      "type": "single",
+      "required": true,
+      "options": [
+        { "key": "assembly-kdf", "label": "KDF", "base_value": 0 },
+        { "key": "assembly-turnkey", "label": "Turnkey", "base_value": 0 }
+      ],
+      "notes": "KDF/Turnkey are non-priced switches; only Turnkey with touches adds cost."
+    },
+    {
+      "id": "product_touches",
+      "label": "Product Touches",
+      "type": "number",
+      "required": false,
+      "min": 0,
+      "notes": "Only used when Assembly = Turnkey; cost = touch unit × touches."
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "notes": "Used for break pricing (floor) and program total."
+    }
+  ],
+  "parts": {
+    "hpdb-base-fp-24x48": {
+      "label": "Dump Bin Base (24×48)",
+      "base_value": 0
+    },
+    "hpdb-header": {
+      "label": "Header / Sign Kit",
+      "base_value": 0
+    },
+    "header-none": {
+      "label": "No Header / Sign",
+      "base_value": 0
+    },
+    "hpdb-divider-unit": {
+      "label": "Divider (per divider)",
+      "base_value": 0
+    },
+    "hpdb-support-riser": {
+      "label": "Support Riser",
+      "base_value": 0
+    },
+    "hpdb-false-bottom": {
+      "label": "False Bottom",
+      "base_value": 0
+    },
+    "hpdb-shipper-fp-24x48": {
+      "label": "Shipper (24×48)",
+      "base_value": 0
+    },
+    "assembly-touch-unit": {
+      "label": "Assembly Touch (per touch)",
+      "base_value": 0.12
+    }
+  },
+  "rules": {
+    "resolve_footprint_base": {
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hpdb-base-fp-24x48"
+      }
+    },
+    "resolve_header": {
+      "when_control": "header",
+      "when_value": "header-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hpdb-header"
+      },
+      "else": "header-none"
+    },
+    "resolve_dividers": {
+      "quantity_control": "divider_count",
+      "map_by": "footprint",
+      "map": {
+        "fp-24x48": "hpdb-divider-unit"
+      },
+      "else": null,
+      "pricing": "linear"
+    },
+    "resolve_support_riser": {
+      "when_control": "support_riser",
+      "when_value": "riser-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hpdb-support-riser"
+      },
+      "else": null
+    },
+    "resolve_false_bottom": {
+      "when_control": "false_bottom",
+      "when_value": "falsebottom-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hpdb-false-bottom"
+      },
+      "else": null
+    },
+    "resolve_shipper": {
+      "when_control": "shipper",
+      "when_value": "shipper-yes",
+      "based_on_control": "footprint",
+      "map": {
+        "fp-24x48": "hpdb-shipper-fp-24x48"
+      },
+      "else": null
+    },
+    "resolve_assembly_touches": {
+      "when_control": "assembly",
+      "when_value": "assembly-turnkey",
+      "quantity_control": "product_touches",
+      "min_quantity": 1,
+      "part": "assembly-touch-unit",
+      "pricing": "linear",
+      "else": null
+    }
+  },
+  "policy": {
+    "matrix_markups": [
+      [0.35, 0.4, 0.45],
+      [0.3, 0.35, 0.4],
+      [0.25, 0.3, 0.35]
+    ],
+    "break_pricing": {
+      "selection": "floor",
+      "sub_100_smoothing": {
+        "enabled": true,
+        "method": "exponential",
+        "tiers": [1, 25, 50, 75, 100]
+      }
+    },
+    "display_weight_round": 0.01,
+    "markup_application": "program_total"
+  }
+}

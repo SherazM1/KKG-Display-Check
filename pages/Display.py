@@ -29,7 +29,12 @@ st.markdown(
 ASSETS_ROOT = "assets/references"
 
 ROW_ORDER = ["pdq", "sidekick", "halfpallet", "dumpbin"]
-ROW_TITLES = {"pdq": "PDQs", "sidekick": "Sidekicks", "halfpallet": "Half Pallets", "dumpbin": "Dump Bins"}
+ROW_TITLES = {
+    "pdq": "PDQs",
+    "sidekick": "Sidekicks",
+    "halfpallet": "Half Pallets",
+    "dumpbin": "Dump Bins",
+}
 
 LABEL_OVERRIDES = {
     # --- PDQs (order doesn't matter; mapping by filename stem) ---
@@ -37,18 +42,14 @@ LABEL_OVERRIDES = {
     "digital_pdq_tray": "Angled PDQ Tray",
     "square_pdq_tray": "Square PDQ Tray",
     "standardclub_pdq_tray": "Standard PDQ Tray",
-
     # --- Sidekicks ---
     "sidekickpeg24": "Sidekick - Pegged 24",
     "sidekickpeg48": "Sidekick - Pegged 48",
     "sidekickshelves24": "Sidekick - Shelves 24",
     "sidekickshelves48": "Sidekick - Shelves 48",
-
-
-    # --- Half Pallets --- 
+    # --- Half Pallets ---
     "frontfaced_hp": "Front-Faced Half Pallet",
     "threesided_hp": "Three-Sided Half Pallet",
-
     # --- Dump Bins ---
     "dump_bin": "Half Pallet Dump Bin",
 }
@@ -58,6 +59,16 @@ PDQ_CATALOG_BY_STEM = {
     "digital_pdq_tray": "data/catalog/pdq.json",
     "square_pdq_tray": "data/catalog/pdq.json",
     "standardclub_pdq_tray": "data/catalog/pdq.json",
+}
+
+# New: real JSON catalogs for half pallets + dump bins
+HALFPALLET_CATALOG_BY_STEM = {
+    "frontfaced_hp": "data/catalog/frontfaced_hp.json",
+    "threesided_hp": "data/catalog/threesided_hp.json",
+}
+
+DUMPBIN_CATALOG_BY_STEM = {
+    "dump_bin": "data/catalog/dump_bin.json",
 }
 
 
@@ -116,28 +127,27 @@ def render_wc_grid(
             border-radius: 999px;
             margin: 2px 0 8px 0;
           }}
-            .wc-axis-left {{
+          .wc-axis-left {{
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 22px;         /* <-- bigger Weight */
+            font-size: 22px;
             color: #111827;
             transform: rotate(-90deg);
             white-space: nowrap;
             user-select: none;
-            margin-top: 180px;        /* <-- move Weight DOWN (adjust as needed) */
+            margin-top: 180px;
           }}
           .wc-axis-bottom {{
             text-align: center;
             font-weight: 900;
-            font-size: 22px;         /* <-- bigger Complexity */
-            margin-top: 14px;        /* keep spacing nice */
+            font-size: 22px;
+            margin-top: 14px;
             color: #111827;
             user-select: none;
           }}
-
         </style>
         """,
         unsafe_allow_html=True,
@@ -226,10 +236,6 @@ def _render_catalog_controls(
     """
     Renders controls with strict step-gating (required chain).
     Returns True iff all required controls (that are visible in the current form state) are answered.
-
-    Strict behavior:
-      - required single controls start at '__unset__' via a '— Select —' option
-      - required number controls are not "answered" until touched, even if 0
     """
     required_chain_ok = True
 
@@ -263,7 +269,6 @@ def _render_catalog_controls(
             opt_labels = [o.get("label") for o in opts]
             opt_keys = [o.get("key") for o in opts]
 
-            # Strict: required singles start as unset
             if bool(ctrl.get("required", False)):
                 opt_labels = ["— Select —"] + opt_labels
                 opt_keys = ["__unset__"] + opt_keys
@@ -295,7 +300,7 @@ def _render_catalog_controls(
             touched_key = f"{prefix}__{cid}__touched"
             prev_val = st.session_state.get(f"{prefix}__{cid}__prev")
 
-            is_int = cid in ("quantity", "divider_count", "product_touches", "pegs_count")
+            is_int = cid in ("quantity", "divider_count", "product_touches", "pegs_count", "shelf_count")
             if is_int:
                 default = int(saved) if saved is not None else (max(1, int(min_v)) if cid == "quantity" else int(min_v))
                 val = st.number_input(
@@ -321,7 +326,6 @@ def _render_catalog_controls(
                 if enabled:
                     form[cid] = float(val)
 
-            # Strict: mark touched only after user interaction changes the value
             if enabled:
                 current = form.get(cid)
                 if prev_val is None:
@@ -340,7 +344,6 @@ def _render_catalog_controls(
         if not required_chain_ok:
             st.caption("Complete the current step to continue.")
 
-    # Final completion check (only visible required fields are evaluated in-loop)
     return bool(required_chain_ok)
 
 
@@ -378,7 +381,6 @@ def _compute_and_render_totals(
     qty = int(form.get("quantity") or 1)
     qty = max(qty, 1)
 
-
     def _parts_value_with_qty(part_key: str) -> float:
         """
         Backward-compatible call path:
@@ -393,10 +395,7 @@ def _compute_and_render_totals(
                 return float(pricing.parts_value(catalog, part_key))
             raise
 
-    per_unit_parts_subtotal = sum(
-        _parts_value_with_qty(part_key) * q
-        for part_key, q in resolved
-    )
+    per_unit_parts_subtotal = sum(_parts_value_with_qty(part_key) * q for part_key, q in resolved)
     program_base = per_unit_parts_subtotal * qty
     markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
@@ -435,7 +434,7 @@ def _compute_and_render_totals(
 # ---------- Header ----------
 st.markdown("## Select the type of display")
 
-# ---------- Rows: PDQs then Sidekicks ----------
+# ---------- Rows ----------
 for cat_name in ROW_ORDER:
     st.markdown(f"### {ROW_TITLES.get(cat_name, cat_name.title())}")
 
@@ -450,6 +449,33 @@ for cat_name in ROW_ORDER:
             gallery.render_tile(t, preview_w=640, preview_h=460)
 
 selected_key: Optional[str] = st.session_state.get("selected_display_key")
+
+
+def _selected_tile_meta(selected_key: str) -> Tuple[str, str, str, str]:
+    """
+    Returns (category, stem, label, hero_image) for the selected tile.
+    """
+    category, stem = selected_key.split("/", 1)
+    label = LABEL_OVERRIDES.get(stem, stem.replace("_", " ").replace("-", " ").title())
+    hero_image = f"{ASSETS_ROOT}/{category}/{stem}.png"
+    return category, stem, label, hero_image
+
+
+def _catalog_path_for_tile(category: str, stem: str) -> Optional[str]:
+    """
+    Returns a catalog path for tiles that have real JSON dictionaries,
+    otherwise None to indicate fallback to generic placeholder.
+    """
+    if category == "pdq":
+        return PDQ_CATALOG_BY_STEM.get(stem, "data/catalog/pdq.json")
+    if category == "sidekick":
+        return f"data/catalog/{stem}.json"
+    if category == "halfpallet":
+        return HALFPALLET_CATALOG_BY_STEM.get(stem)
+    if category == "dumpbin":
+        return DUMPBIN_CATALOG_BY_STEM.get(stem)
+    return None
+
 
 def _generic_catalog_for_selected_tile(
     *,
@@ -598,7 +624,6 @@ def _generic_catalog_for_selected_tile(
 def render_pdq_form(selected_stem: str) -> None:
     catalog_path = PDQ_CATALOG_BY_STEM.get(selected_stem, "data/catalog/pdq.json")
     catalog = cat.load_catalog(catalog_path)
-    
 
     st.divider()
     display_label = (catalog.get("meta", {}) or {}).get("display_label", "PDQ Tray")
@@ -623,24 +648,16 @@ def render_pdq_form(selected_stem: str) -> None:
 def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict, *, prefix: str = "sidekick") -> str:
     """
     Returns the footprint option key that should be forced into `form["footprint"]`.
-
-    Supports:
-      - Pegged catalogs: footprint has exactly 1 option (fp-24 or fp-48) => use it.
-      - Shelved catalogs: footprint has multiple options AND an `edge` control.
-        Convention: footprint option keys contain "-raw" / "-clean" (or end with those).
-        If edge is unset, default to raw footprint when available.
     """
     fp_ctrl = cat.find_control(catalog, "footprint") or {}
     fp_opts = fp_ctrl.get("options", []) or []
 
     if not fp_opts:
-        return "fp-24"  # safe fallback
+        return "fp-24"
 
     if len(fp_opts) == 1:
         return str(fp_opts[0].get("key") or "fp-24")
 
-    # Shelved case: multiple footprint options, keyed by edge
-    # Prefer the current widget selection (label) over stale form state.
     edge = form.get("edge")
     widget_key = f"{prefix}__edge"
     if widget_key in st.session_state:
@@ -667,7 +684,6 @@ def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict, *, prefix: str = "
             if _match_edge(k, edge):
                 return k
 
-    # Default edge to raw if present
     for k in keys:
         if _match_edge(k, "raw"):
             return k
@@ -678,7 +694,6 @@ def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict, *, prefix: str = "
 def _sidekick_footprint_pill(catalog: Dict, fp_key: str) -> str:
     """
     Builds the pill text (e.g., 'Footprint: 24', 'Footprint: 48', 'Footprint: 24 (Raw)').
-    Uses footprint dims when present; falls back to the key.
     """
     fp_ctrl = cat.find_control(catalog, "footprint") or {}
     fp_opts = fp_ctrl.get("options", []) or []
@@ -727,48 +742,53 @@ def render_sidekick_form(selected_stem: str) -> None:
         unlocked=unlocked,
     )
 
-def _selected_tile_meta(selected_key: str) -> Tuple[str, str, str, str]:
-    """
-    Returns (category, stem, label, hero_image) for the selected tile.
-    """
-    category, stem = selected_key.split("/", 1)
-    label = LABEL_OVERRIDES.get(stem, stem.replace("_", " ").replace("-", " ").title())
-    hero_image = f"{ASSETS_ROOT}/{category}/{stem}.png"
-    return category, stem, label, hero_image
 
-
-def render_generic_display_form(*, selected_key: str, prefix: str) -> None:
+def render_generic_display_form(*, selected_key: str) -> None:
+    """
+    Handles halfpallet + dumpbin (and any future categories) by:
+      - preferring a real JSON catalog when mapped
+      - falling back to generic placeholder catalog otherwise
+    """
     category, stem, label, hero_image = _selected_tile_meta(selected_key)
 
-    catalog = _generic_catalog_for_selected_tile(
-        category=category,
-        stem=stem,
-        label=label,
-        hero_image=hero_image,
-    )
+    catalog_path = _catalog_path_for_tile(category, stem)
+    if catalog_path:
+        catalog = cat.load_catalog(catalog_path)
+        display_label = (catalog.get("meta", {}) or {}).get("display_label", label)
+    else:
+        catalog = _generic_catalog_for_selected_tile(
+            category=category,
+            stem=stem,
+            label=label,
+            hero_image=hero_image,
+        )
+        display_label = label
 
     st.divider()
-    st.subheader(f"{label.upper()} — Configuration")
-    st.caption("Placeholder configuration until pricing dictionaries are created.")
+    st.subheader(f"{display_label.upper()} — Configuration")
+    if not catalog_path:
+        st.caption("Placeholder configuration until pricing dictionaries are created.")
 
-    state_key = f"{prefix}_form"
+    # Per-stem state keys so halfpallet variants don't share form state
+    state_key = f"{category}_{stem}_form"
     if state_key not in st.session_state:
         st.session_state[state_key] = {}
     form: Dict = st.session_state[state_key]
+
+    # Per-stem prefixes so widget keys don't collide across variants
+    prefix = f"{category}_{stem}"
 
     unlocked = _render_catalog_controls(catalog=catalog, form=form, prefix=prefix)
 
     _compute_and_render_totals(
         catalog=catalog,
         form=form,
-        wc_key=f"{prefix}_wc_idx",
+        wc_key=f"{category}_{stem}_wc_idx",
         wc_default=(2, 0),
         unlocked=unlocked,
     )
 
 
-
-# ---------- Router ----------
 # ---------- Router ----------
 if selected_key and selected_key.startswith("pdq/"):
     stem = selected_key.split("/", 1)[1]
@@ -782,9 +802,8 @@ elif selected_key and (
     selected_key.startswith("halfpallet/")
     or selected_key.startswith("dumpbin/")
 ):
-    # Generic placeholder config for now (no JSON dictionaries yet)
-    prefix = selected_key.split("/", 1)[0]
-    render_generic_display_form(selected_key=selected_key, prefix=prefix)
+    # Now loads real JSON catalogs when mapped; otherwise falls back to placeholder
+    render_generic_display_form(selected_key=selected_key)
 
 elif selected_key:
     st.divider()
