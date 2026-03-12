@@ -1,3 +1,4 @@
+# pages/Display.py
 from __future__ import annotations
 
 import html
@@ -61,7 +62,6 @@ PDQ_CATALOG_BY_STEM = {
     "standardclub_pdq_tray": "data/catalog/pdq.json",
 }
 
-# New: real JSON catalogs for half pallets + dump bins
 HALFPALLET_CATALOG_BY_STEM = {
     "frontfaced_hp": "data/catalog/frontfaced_hp.json",
     "threesided_hp": "data/catalog/threesided_hp.json",
@@ -242,6 +242,86 @@ def _render_catalog_controls(
     if fixed_footprint:
         form["footprint"] = fixed_footprint
 
+    def _pdq_fulfillment_caption(ctrl_id: str) -> None:
+        """
+        PDQ-only: show per-display (pre-markup) fulfillment/assembly lines under the relevant fields.
+        Displayed only when the computed per-display amount is > 0.00.
+        """
+        try:
+            if prefix != "pdq":
+                return
+            meta = catalog.get("meta", {}) or {}
+            if meta.get("category") != "pdq":
+                return
+            if form.get("assembly") != "assembly-turnkey":
+                return
+
+            fp_key = form.get("footprint")
+            if not fp_key:
+                return
+
+            program_qty = int(form.get("quantity") or 1)
+            program_qty = max(program_qty, 1)
+            rules = catalog.get("rules", {}) or {}
+
+            if ctrl_id == "divider_count":
+                divider_count = int(form.get("divider_count") or 0)
+                if divider_count <= 0:
+                    return
+                r = rules.get("resolve_fulfillment_divider_assembly", {}) or {}
+                part_key = (r.get("map", {}) or {}).get(fp_key)
+                if not part_key:
+                    return
+                per_display = float(
+                    pricing.parts_value(catalog, part_key, program_qty=program_qty, item_qty=divider_count)
+                )
+                if per_display <= 0.0:
+                    return
+                total = per_display * program_qty
+                st.caption(
+                    f"Divider assembly applied (pre-markup): Adding assembly for {divider_count} dividers adds "
+                    f"${per_display:,.2f} per display (× {program_qty:,} displays = ${total:,.2f})."
+                )
+                return
+
+            if ctrl_id == "product_touches":
+                touches = int(form.get("product_touches") or 0)
+                if touches <= 0:
+                    return
+                r = rules.get("resolve_assembly_touches", {}) or {}
+                part_key = (r.get("map", {}) or {}).get(fp_key) or r.get("part")
+                if not part_key:
+                    return
+                per_display = float(
+                    pricing.parts_value(catalog, part_key, program_qty=program_qty, item_qty=touches)
+                )
+                if per_display <= 0.0:
+                    return
+                total = per_display * program_qty
+                st.caption(
+                    f"Product fill applied (pre-markup): Adding {touches} product fills adds "
+                    f"${per_display:,.2f} per display (× {program_qty:,} displays = ${total:,.2f})."
+                )
+                return
+
+            if ctrl_id == "header":
+                if form.get("header") != "header-yes":
+                    return
+                r = rules.get("resolve_fulfillment_packout_header", {}) or {}
+                part_key = (r.get("map", {}) or {}).get(fp_key)
+                if not part_key:
+                    return
+                per_display = float(pricing.parts_value(catalog, part_key, program_qty=program_qty))
+                if per_display <= 0.0:
+                    return
+                total = per_display * program_qty
+                st.caption(
+                    "Header pack-out applied (pre-markup): Because Header = Yes, header pack-out adds "
+                    f"${per_display:,.2f} per display (× {program_qty:,} displays = ${total:,.2f})."
+                )
+        except Exception:
+            return
+
     for ctrl in catalog.get("controls", []) or []:
         cid = ctrl.get("id")
         ctype = ctrl.get("type")
@@ -292,6 +372,8 @@ def _render_catalog_controls(
 
             if enabled:
                 form[cid] = opt_keys[opt_labels.index(choice)]
+                if cid == "header":
+                    _pdq_fulfillment_caption("header")
 
         elif ctype == "number":
             min_v = ctrl.get("min", 0)
@@ -334,6 +416,9 @@ def _render_catalog_controls(
                     if current != prev_val:
                         st.session_state[touched_key] = True
                         st.session_state[f"{prefix}__{cid}__prev"] = current
+
+                if cid in ("divider_count", "product_touches"):
+                    _pdq_fulfillment_caption(cid)
 
         else:
             st.caption(f"Unsupported control type: {ctype} for `{cid}`")
@@ -381,21 +466,40 @@ def _compute_and_render_totals(
     qty = int(form.get("quantity") or 1)
     qty = max(qty, 1)
 
-    def _parts_value_with_qty(part_key: str) -> float:
+    parts = catalog.get("parts", {}) or {}
+
+    def _parts_value_with_qty(part_key: str, *, item_qty: int | None = None) -> float:
         """
-        Backward-compatible call path:
-        - Prefer break-aware pricing via `program_qty`.
-        - Fallback for older pricing modules that don't accept this kwarg.
+        Prefer break-aware pricing via `program_qty`.
+        For adder-cap fulfillment parts, pass the entered count via `item_qty`
+        so pricing can compute base+adders.
         """
         try:
-            return float(pricing.parts_value(catalog, part_key, program_qty=qty))
+            return float(pricing.parts_value(catalog, part_key, program_qty=qty, item_qty=item_qty))
         except TypeError as exc:
             msg = str(exc)
-            if "program_qty" in msg and "unexpected keyword" in msg:
-                return float(pricing.parts_value(catalog, part_key))
+            if "unexpected keyword" in msg:
+                if item_qty is not None:
+                    try:
+                        return float(pricing.parts_value(catalog, part_key, program_qty=qty))
+                    except TypeError:
+                        pass
+                try:
+                    return float(pricing.parts_value(catalog, part_key))
+                except Exception:
+                    return 0.0
             raise
 
-    per_unit_parts_subtotal = sum(_parts_value_with_qty(part_key) * q for part_key, q in resolved)
+    per_unit_parts_subtotal = 0.0
+    for part_key, q_per_display in resolved:
+        part_spec = parts.get(part_key, {}) or {}
+        pricing_family = str(part_spec.get("pricing_family") or "").strip()
+
+        if pricing_family == "fulfillment_adder_cap":
+            per_unit_parts_subtotal += _parts_value_with_qty(part_key, item_qty=int(q_per_display))
+        else:
+            per_unit_parts_subtotal += _parts_value_with_qty(part_key) * int(q_per_display)
+
     program_base = per_unit_parts_subtotal * qty
     markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
@@ -413,6 +517,7 @@ def _compute_and_render_totals(
     selected_label = labels[int(sel_r)][int(sel_c)]
 
     st.markdown("### Totals")
+    st.caption("Note: Markup will be applied at the end.")
     st.markdown(
         f"""
         <div style="display:grid; gap:10px; max-width:720px;">
@@ -425,10 +530,12 @@ def _compute_and_render_totals(
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
-        unsafe_allow_html=True,
-    )
+    meta = catalog.get("meta", {}) or {}
+    if meta.get("category") != "pdq":
+        st.markdown(
+            "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ---------- Header ----------
@@ -744,11 +851,6 @@ def render_sidekick_form(selected_stem: str) -> None:
 
 
 def render_generic_display_form(*, selected_key: str) -> None:
-    """
-    Handles halfpallet + dumpbin (and any future categories) by:
-      - preferring a real JSON catalog when mapped
-      - falling back to generic placeholder catalog otherwise
-    """
     category, stem, label, hero_image = _selected_tile_meta(selected_key)
 
     catalog_path = _catalog_path_for_tile(category, stem)
@@ -769,13 +871,11 @@ def render_generic_display_form(*, selected_key: str) -> None:
     if not catalog_path:
         st.caption("Placeholder configuration until pricing dictionaries are created.")
 
-    # Per-stem state keys so halfpallet variants don't share form state
     state_key = f"{category}_{stem}_form"
     if state_key not in st.session_state:
         st.session_state[state_key] = {}
     form: Dict = st.session_state[state_key]
 
-    # Per-stem prefixes so widget keys don't collide across variants
     prefix = f"{category}_{stem}"
 
     unlocked = _render_catalog_controls(catalog=catalog, form=form, prefix=prefix)
@@ -798,11 +898,7 @@ elif selected_key and selected_key.startswith("sidekick/"):
     stem = selected_key.split("/", 1)[1]
     render_sidekick_form(stem)
 
-elif selected_key and (
-    selected_key.startswith("halfpallet/")
-    or selected_key.startswith("dumpbin/")
-):
-    # Now loads real JSON catalogs when mapped; otherwise falls back to placeholder
+elif selected_key and (selected_key.startswith("halfpallet/") or selected_key.startswith("dumpbin/")):
     render_generic_display_form(selected_key=selected_key)
 
 elif selected_key:
