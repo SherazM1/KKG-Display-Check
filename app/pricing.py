@@ -1,7 +1,15 @@
 # app/pricing.py
 from __future__ import annotations
 
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Tuple
+
+PDQ_PRODUCTION_UPLIFT_MULTIPLIERS: Dict[str, float] = {
+    "angled": 1.00,
+    "clipped": 1.10,
+    "square": 1.15,
+    "standard": 1.20,
+}
 
 
 def _as_float(value: object, default: float = 0.0) -> float:
@@ -20,6 +28,22 @@ def _as_int(value: object, default: int = 0) -> int:
 
 def _round_money(value: float) -> float:
     return round(float(value) + 1e-9, 2)
+
+
+def _round_money_half_up(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def pdq_production_multiplier(pdq_type: str | None) -> float:
+    key = str(pdq_type or "angled").strip().lower()
+    return float(PDQ_PRODUCTION_UPLIFT_MULTIPLIERS.get(key, 1.00))
+
+
+def _apply_production_uplift(raw_unit: float, multiplier: float) -> float:
+    mult = _as_float(multiplier, 1.0)
+    if abs(mult - 1.0) < 1e-12:
+        return _round_money(raw_unit)
+    return _round_money_half_up(_as_float(raw_unit, 0.0) * mult)
 
 
 def _parse_breaks_map(breaks: object) -> List[Tuple[int, float]]:
@@ -197,6 +221,7 @@ def parts_value(
     *,
     program_qty: int | None = None,
     item_qty: int | None = None,
+    production_multiplier: float | None = None,
     **_ignored,
 ) -> float:
     """
@@ -231,14 +256,17 @@ def parts_value(
                 catalog, part_spec, count=n, program_qty=pq
             )
 
+        production_mult = _as_float(production_multiplier, 1.0)
         qty = pq
         effective_breaks = _effective_breaks_for_part(catalog, part_spec, qty)
         if effective_breaks is not None:
             parsed = _parse_breaks_map(effective_breaks)
             if parsed:
-                return _round_money(_floor_from_parsed_breaks(parsed, qty))
+                raw_unit = _floor_from_parsed_breaks(parsed, qty)
+                return _apply_production_uplift(raw_unit, production_mult)
 
-        return _round_money(_as_float(part_spec.get("base_value", 0.0), 0.0))
+        raw_unit = _as_float(part_spec.get("base_value", 0.0), 0.0)
+        return _apply_production_uplift(raw_unit, production_mult)
     except Exception:
         return 0.0
 

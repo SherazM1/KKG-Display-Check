@@ -7,6 +7,20 @@ from typing import Dict, List, Optional
 import streamlit as st
 from PIL import Image, ImageChops, ImageOps
 
+PDQ_TYPE_BY_STEM = {
+    "digital_pdq_tray": "angled",
+    "clipped_pdq_tray": "clipped",
+    "square_pdq_tray": "square",
+    "standardclub_pdq_tray": "standard",
+}
+
+PDQ_MULTIPLIER_BY_TYPE = {
+    "angled": 1.00,
+    "clipped": 1.10,
+    "square": 1.15,
+    "standard": 1.20,
+}
+
 
 @dataclass
 class OptionTile:
@@ -105,3 +119,10 @@ def render_tile(tile: OptionTile, *, preview_w: int = 640, preview_h: int = 460)
 
     if st.button("Select", key=f"select_{tile.key}", use_container_width=True):
         st.session_state.selected_display_key = tile.key
+        if tile.category == "pdq":
+            pdq_type = PDQ_TYPE_BY_STEM.get(
+                tile.key.split("/", 1)[1],
+                "angled",
+            )
+            st.session_state.pdq_type = pdq_type
+            st.session_state.pdq_multiplier = float(PDQ_MULTIPLIER_BY_TYPE.get(pdq_type, 1.00))

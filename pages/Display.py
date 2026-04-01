@@ -62,6 +62,27 @@ PDQ_CATALOG_BY_STEM = {
     "standardclub_pdq_tray": "data/catalog/pdq.json",
 }
 
+PDQ_TYPE_BY_STEM = {
+    "digital_pdq_tray": "angled",
+    "clipped_pdq_tray": "clipped",
+    "square_pdq_tray": "square",
+    "standardclub_pdq_tray": "standard",
+}
+
+PDQ_TYPE_LABELS = {
+    "angled": "Angled PDQ",
+    "clipped": "Clipped PDQ",
+    "square": "Square PDQ",
+    "standard": "Standard Club PDQ",
+}
+
+PDQ_MULTIPLIER_BY_TYPE = {
+    "angled": 1.00,
+    "clipped": 1.10,
+    "square": 1.15,
+    "standard": 1.20,
+}
+
 HALFPALLET_CATALOG_BY_STEM = {
     "frontfaced_hp": "data/catalog/frontfaced_hp.json",
     "threesided_hp": "data/catalog/threesided_hp.json",
@@ -262,6 +283,10 @@ def _render_catalog_controls(
 
             program_qty = int(form.get("quantity") or 1)
             program_qty = max(program_qty, 1)
+            production_multiplier = float(
+                form.get("pdq_multiplier")
+                or pricing.pdq_production_multiplier(str(form.get("pdq_type") or "angled"))
+            )
             rules = catalog.get("rules", {}) or {}
 
             if ctrl_id == "divider_count":
@@ -273,7 +298,13 @@ def _render_catalog_controls(
                 if not part_key:
                     return
                 per_display = float(
-                    pricing.parts_value(catalog, part_key, program_qty=program_qty, item_qty=divider_count)
+                    pricing.parts_value(
+                        catalog,
+                        part_key,
+                        program_qty=program_qty,
+                        item_qty=divider_count,
+                        production_multiplier=production_multiplier,
+                    )
                 )
                 if per_display <= 0.0:
                     return
@@ -293,7 +324,13 @@ def _render_catalog_controls(
                 if not part_key:
                     return
                 per_display = float(
-                    pricing.parts_value(catalog, part_key, program_qty=program_qty, item_qty=touches)
+                    pricing.parts_value(
+                        catalog,
+                        part_key,
+                        program_qty=program_qty,
+                        item_qty=touches,
+                        production_multiplier=production_multiplier,
+                    )
                 )
                 if per_display <= 0.0:
                     return
@@ -311,7 +348,14 @@ def _render_catalog_controls(
                 part_key = (r.get("map", {}) or {}).get(fp_key)
                 if not part_key:
                     return
-                per_display = float(pricing.parts_value(catalog, part_key, program_qty=program_qty))
+                per_display = float(
+                    pricing.parts_value(
+                        catalog,
+                        part_key,
+                        program_qty=program_qty,
+                        production_multiplier=production_multiplier,
+                    )
+                )
                 if per_display <= 0.0:
                     return
                 total = per_display * program_qty
@@ -465,6 +509,14 @@ def _compute_and_render_totals(
     resolved = pricing.resolve_parts_per_unit(catalog, form, footprint_dims=(width_in, depth_in))
     qty = int(form.get("quantity") or 1)
     qty = max(qty, 1)
+    pdq_multiplier = (
+        float(
+            form.get("pdq_multiplier")
+            or pricing.pdq_production_multiplier(str(form.get("pdq_type") or "angled"))
+        )
+        if (catalog.get("meta", {}) or {}).get("category") == "pdq"
+        else 1.0
+    )
 
     parts = catalog.get("parts", {}) or {}
 
@@ -475,17 +527,34 @@ def _compute_and_render_totals(
         so pricing can compute base+adders.
         """
         try:
-            return float(pricing.parts_value(catalog, part_key, program_qty=qty, item_qty=item_qty))
+            return float(
+                pricing.parts_value(
+                    catalog,
+                    part_key,
+                    program_qty=qty,
+                    item_qty=item_qty,
+                    production_multiplier=pdq_multiplier,
+                )
+            )
         except TypeError as exc:
             msg = str(exc)
             if "unexpected keyword" in msg:
                 if item_qty is not None:
                     try:
-                        return float(pricing.parts_value(catalog, part_key, program_qty=qty))
+                        return float(
+                            pricing.parts_value(
+                                catalog,
+                                part_key,
+                                program_qty=qty,
+                                production_multiplier=pdq_multiplier,
+                            )
+                        )
                     except TypeError:
                         pass
                 try:
-                    return float(pricing.parts_value(catalog, part_key))
+                    return float(
+                        pricing.parts_value(catalog, part_key, production_multiplier=pdq_multiplier)
+                    )
                 except Exception:
                     return 0.0
             raise
@@ -517,6 +586,11 @@ def _compute_and_render_totals(
     selected_label = labels[int(sel_r)][int(sel_c)]
 
     st.markdown("### Totals")
+    if (catalog.get("meta", {}) or {}).get("category") == "pdq":
+        st.caption(
+            f"PDQ production uplift: {(pdq_multiplier - 1.0) * 100:.0f}% "
+            "(applied to production unit prices only; fulfillment is unchanged)."
+        )
     st.caption("Note: Markup will be applied at the end.")
     st.markdown(
         f"""
@@ -739,6 +813,17 @@ def render_pdq_form(selected_stem: str) -> None:
     if "form" not in st.session_state:
         st.session_state.form = {}
     form: Dict = st.session_state.form
+    pdq_type = str(st.session_state.get("pdq_type") or PDQ_TYPE_BY_STEM.get(selected_stem, "angled"))
+    pdq_multiplier = float(
+        st.session_state.get("pdq_multiplier")
+        or PDQ_MULTIPLIER_BY_TYPE.get(pdq_type, 1.00)
+    )
+    form["pdq_type"] = pdq_type
+    form["pdq_multiplier"] = pdq_multiplier
+    st.caption(
+        f"Selected PDQ type: {PDQ_TYPE_LABELS.get(pdq_type, pdq_type.title())} "
+        f"(production multiplier {pdq_multiplier:.2f}x)."
+    )
 
     unlocked = _render_catalog_controls(catalog=catalog, form=form, prefix="pdq")
 
