@@ -1,4 +1,4 @@
-# pages/Display.py
+﻿# pages/Display.py
 from __future__ import annotations
 
 import html
