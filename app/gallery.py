@@ -21,6 +21,15 @@ PDQ_MULTIPLIER_BY_TYPE = {
     "standard": 1.20,
 }
 
+SIDEKICK_CATALOG_PATH = "data/catalog/sidekick.json"
+
+SIDEKICK_INTENT_BY_STEM = {
+    "sidekickpeg24": {"mode": "hooks", "width": 24, "footprint": "sk-24-hooks"},
+    "sidekickpeg48": {"mode": "hooks", "width": 48, "footprint": "sk-48-hooks"},
+    "sidekickshelves24": {"mode": "shelves", "width": 24},
+    "sidekickshelves48": {"mode": "shelves", "width": 48},
+}
+
 
 @dataclass
 class OptionTile:
@@ -119,10 +128,21 @@ def render_tile(tile: OptionTile, *, preview_w: int = 640, preview_h: int = 460)
 
     if st.button("Select", key=f"select_{tile.key}", use_container_width=True):
         st.session_state.selected_display_key = tile.key
+        stem = tile.key.split("/", 1)[1] if "/" in tile.key else tile.key
         if tile.category == "pdq":
             pdq_type = PDQ_TYPE_BY_STEM.get(
-                tile.key.split("/", 1)[1],
+                stem,
                 "angled",
             )
             st.session_state.pdq_type = pdq_type
             st.session_state.pdq_multiplier = float(PDQ_MULTIPLIER_BY_TYPE.get(pdq_type, 1.00))
+        elif tile.category == "sidekick":
+            st.session_state.selected_catalog_override_path = SIDEKICK_CATALOG_PATH
+            intent = SIDEKICK_INTENT_BY_STEM.get(stem, {})
+            st.session_state.sidekick_intent = intent
+            st.session_state.sidekick_mode = intent.get("mode")
+            st.session_state.sidekick_width = intent.get("width")
+            if "footprint" in intent:
+                st.session_state.sidekick_footprint_preset = intent["footprint"]
+            else:
+                st.session_state.sidekick_footprint_preset = None

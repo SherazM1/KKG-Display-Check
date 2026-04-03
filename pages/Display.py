@@ -92,6 +92,18 @@ DUMPBIN_CATALOG_BY_STEM = {
     "dump_bin": "data/catalog/dump_bin.json",
 }
 
+SIDEKICK_SHARED_CATALOG_PATH = "data/catalog/sidekick.json"
+SIDEKICK_HOOKS_FP_BY_STEM = {
+    "sidekickpeg24": "sk-24-hooks",
+    "sidekickpeg48": "sk-48-hooks",
+}
+SIDEKICK_SHELVES_FP_BY_STEM_AND_STYLE = {
+    ("sidekickshelves24", "Rolled Sides"): "sk-24-shelves-rolled",
+    ("sidekickshelves24", "Built-in Shelves"): "sk-24-shelves-built",
+    ("sidekickshelves48", "Rolled Sides"): "sk-48-shelves-rolled",
+    ("sidekickshelves48", "Built-in Shelves"): "sk-48-shelves-built",
+}
+
 
 # ---------- Weight/Complexity grid ----------
 def render_wc_grid(
@@ -426,11 +438,24 @@ def _render_catalog_controls(
             touched_key = f"{prefix}__{cid}__touched"
             prev_val = st.session_state.get(f"{prefix}__{cid}__prev")
 
-            is_int = cid in ("quantity", "divider_count", "product_touches", "pegs_count", "shelf_count")
+            is_int = cid in (
+                "quantity",
+                "divider_count",
+                "product_touches",
+                "pegs_count",
+                "shelf_count",
+                "shelves_count",
+            )
+            number_label = label
+            if prefix == "sidekick" and cid == "shelves_count":
+                selected_key = str(st.session_state.get("selected_display_key") or "")
+                sidekick_mode = st.session_state.get("sidekick_mode")
+                is_hooks = sidekick_mode == "hooks" or selected_key.startswith("sidekick/sidekickpeg")
+                number_label = "Number of Pegs" if is_hooks else "Number of Shelves"
             if is_int:
                 default = int(saved) if saved is not None else (max(1, int(min_v)) if cid == "quantity" else int(min_v))
                 val = st.number_input(
-                    label,
+                    number_label,
                     min_value=int(min_v),
                     step=1,
                     value=int(default),
@@ -442,7 +467,7 @@ def _render_catalog_controls(
             else:
                 default = float(saved) if saved is not None else float(min_v)
                 val = st.number_input(
-                    label,
+                    number_label,
                     min_value=float(min_v),
                     step=0.01,
                     value=float(default),
@@ -650,7 +675,7 @@ def _catalog_path_for_tile(category: str, stem: str) -> Optional[str]:
     if category == "pdq":
         return PDQ_CATALOG_BY_STEM.get(stem, "data/catalog/pdq.json")
     if category == "sidekick":
-        return f"data/catalog/{stem}.json"
+        return SIDEKICK_SHARED_CATALOG_PATH
     if category == "halfpallet":
         return HALFPALLET_CATALOG_BY_STEM.get(stem)
     if category == "dumpbin":
@@ -837,75 +862,8 @@ def render_pdq_form(selected_stem: str) -> None:
 
 
 # ---------- SIDEKICK CONFIG ----------
-def _pick_sidekick_fixed_footprint(catalog: Dict, form: Dict, *, prefix: str = "sidekick") -> str:
-    """
-    Returns the footprint option key that should be forced into `form["footprint"]`.
-    """
-    fp_ctrl = cat.find_control(catalog, "footprint") or {}
-    fp_opts = fp_ctrl.get("options", []) or []
-
-    if not fp_opts:
-        return "fp-24"
-
-    if len(fp_opts) == 1:
-        return str(fp_opts[0].get("key") or "fp-24")
-
-    edge = form.get("edge")
-    widget_key = f"{prefix}__edge"
-    if widget_key in st.session_state:
-        edge_ctrl = cat.find_control(catalog, "edge") or {}
-        edge_opts = edge_ctrl.get("options", []) or []
-        label_to_key = {
-            str(o.get("label")): str(o.get("key"))
-            for o in edge_opts
-            if o.get("label") is not None and o.get("key") is not None
-        }
-        edge = label_to_key.get(str(st.session_state.get(widget_key)))
-
-    edge = None if edge in (None, "", "__unset__") else str(edge)
-
-    keys = [str(o.get("key") or "") for o in fp_opts if o.get("key")]
-
-    def _match_edge(k: str, e: str) -> bool:
-        kl = k.lower()
-        el = e.lower()
-        return kl.endswith(f"-{el}") or f"-{el}-" in kl or kl.endswith(el)
-
-    if edge:
-        for k in keys:
-            if _match_edge(k, edge):
-                return k
-
-    for k in keys:
-        if _match_edge(k, "raw"):
-            return k
-
-    return keys[0] if keys else "fp-24"
-
-
-def _sidekick_footprint_pill(catalog: Dict, fp_key: str) -> str:
-    """
-    Builds the pill text (e.g., 'Footprint: 24', 'Footprint: 48', 'Footprint: 24 (Raw)').
-    """
-    fp_ctrl = cat.find_control(catalog, "footprint") or {}
-    fp_opts = fp_ctrl.get("options", []) or []
-
-    opt = next((o for o in fp_opts if o.get("key") == fp_key), None) or {}
-    dims = opt.get("dims", {}) or {}
-    w = dims.get("width_in")
-
-    label = f"{w}" if w is not None else str(opt.get("label") or fp_key)
-
-    fp_key_l = fp_key.lower()
-    if "raw" in fp_key_l:
-        return f"Footprint: {label} (Raw)"
-    if "clean" in fp_key_l:
-        return f"Footprint: {label} (Clean)"
-    return f"Footprint: {label}"
-
-
 def render_sidekick_form(selected_stem: str) -> None:
-    catalog_path = f"data/catalog/{selected_stem}.json"
+    catalog_path = str(st.session_state.get("selected_catalog_override_path") or "").strip() or SIDEKICK_SHARED_CATALOG_PATH
     catalog = cat.load_catalog(catalog_path)
 
     st.divider()
@@ -916,14 +874,28 @@ def render_sidekick_form(selected_stem: str) -> None:
         st.session_state.sidekick_form = {}
     form: Dict = st.session_state.sidekick_form
 
-    fixed_fp_key = _pick_sidekick_fixed_footprint(catalog, form, prefix="sidekick")
-    st.markdown(f"<div class='pill'>{_sidekick_footprint_pill(catalog, fixed_fp_key)}</div>", unsafe_allow_html=True)
+    sidekick_mode = st.session_state.get("sidekick_mode")
+    if sidekick_mode is None:
+        sidekick_mode = "hooks" if selected_stem in SIDEKICK_HOOKS_FP_BY_STEM else "shelves"
+
+    if sidekick_mode == "hooks":
+        fixed_fp_key = str(st.session_state.get("sidekick_footprint_preset") or "").strip() or SIDEKICK_HOOKS_FP_BY_STEM.get(selected_stem, "")
+    else:
+        shelves_style = str(st.session_state.get("sidekick_shelves_style") or "Rolled Sides")
+        shelves_style = st.radio(
+            "Shelves Style",
+            ["Rolled Sides", "Built-in Shelves"],
+            index=0 if shelves_style != "Built-in Shelves" else 1,
+            key="sidekick_shelves_style",
+            horizontal=True,
+        )
+        fixed_fp_key = SIDEKICK_SHELVES_FP_BY_STEM_AND_STYLE.get((selected_stem, shelves_style), "")
 
     unlocked = _render_catalog_controls(
         catalog=catalog,
         form=form,
         prefix="sidekick",
-        fixed_footprint=fixed_fp_key,
+        fixed_footprint=fixed_fp_key or None,
     )
 
     _compute_and_render_totals(
@@ -933,7 +905,6 @@ def render_sidekick_form(selected_stem: str) -> None:
         wc_default=(2, 0),
         unlocked=unlocked,
     )
-
 
 def render_generic_display_form(*, selected_key: str) -> None:
     category, stem, label, hero_image = _selected_tile_meta(selected_key)
@@ -992,3 +963,4 @@ elif selected_key:
     st.caption("Fields for this display type will be added soon.")
 else:
     st.caption("Select a display above to configure its details.")
+
