@@ -867,7 +867,7 @@ def render_sidekick_form(selected_stem: str) -> None:
     catalog = cat.load_catalog(catalog_path)
 
     st.divider()
-    display_label = (catalog.get("meta", {}) or {}).get("display_label", "Sidekick")
+    display_label = LABEL_OVERRIDES.get(selected_stem, (catalog.get("meta", {}) or {}).get("display_label", "Sidekick"))
     st.subheader(f"{display_label.upper()} — Configuration")
 
     if "sidekick_form" not in st.session_state:
