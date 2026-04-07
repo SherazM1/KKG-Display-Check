@@ -508,6 +508,7 @@ def _compute_and_render_totals(
     wc_key: str,
     wc_default: Tuple[int, int],
     unlocked: bool,
+    catalog_path: Optional[str] = None,
 ) -> None:
     """
     If unlocked=False:
@@ -598,6 +599,61 @@ def _compute_and_render_totals(
     markup_pct = pricing.matrix_markup_pct(policy, selected_rc)
     final_total = program_base * (1.0 + markup_pct)
     final_per_unit = final_total / max(qty, 1)
+    meta = catalog.get("meta", {}) or {}
+
+    if debug_mode and meta.get("category") == "sidekick":
+        selected_key = str(st.session_state.get("selected_display_key") or "")
+        selected_category = ""
+        selected_stem = ""
+        if "/" in selected_key:
+            selected_category, selected_stem = selected_key.split("/", 1)
+
+        any_fulfillment = any(str(part_key).startswith("fulfill-") for part_key, _ in resolved)
+        any_adder_cap = any(
+            str((parts.get(part_key, {}) or {}).get("pricing_family") or "").strip() == "fulfillment_adder_cap"
+            for part_key, _ in resolved
+        )
+
+        rows = []
+        for part_key, q_per_display in resolved:
+            part_spec = parts.get(part_key, {}) or {}
+            pricing_family = str(part_spec.get("pricing_family") or "").strip()
+            q_int = int(q_per_display)
+            if pricing_family == "fulfillment_adder_cap":
+                per_display_value = _parts_value_with_qty(part_key, item_qty=q_int)
+            else:
+                per_display_value = _parts_value_with_qty(part_key) * q_int
+
+            rows.append(
+                {
+                    "part_key": part_key,
+                    "qty_per_display": q_per_display,
+                    "pricing_family": pricing_family or None,
+                    "per_display_value": round(float(per_display_value), 4),
+                    "program_value": round(float(per_display_value) * qty, 4),
+                    "label": part_spec.get("label"),
+                }
+            )
+
+        with st.expander("DEBUG (Sidekick): footprint + resolved parts", expanded=False):
+            st.write("selected_display_key:", selected_key or None)
+            st.write("selected_stem:", selected_stem or None)
+            st.write("selected_category:", selected_category or None)
+            if catalog_path:
+                st.write("catalog_path:", catalog_path)
+            st.write("form.footprint:", form.get("footprint"))
+            st.write("width_in:", width_in, "depth_in:", depth_in)
+            st.write("qty:", qty)
+            st.json(form)
+            st.write("resolved_line_count:", len(resolved))
+            st.write("any_fulfillment:", any_fulfillment)
+            st.write("any_adder_cap:", any_adder_cap)
+            st.dataframe(rows, use_container_width=True)
+            st.write("per_unit_parts_subtotal:", per_unit_parts_subtotal)
+            st.write("program_base:", program_base)
+            st.write("markup_pct:", markup_pct)
+            st.write("final_total:", final_total)
+            st.write("final_per_unit:", final_per_unit)
 
     min_total = program_base * 1.25
     max_total = program_base * 1.45
@@ -629,7 +685,6 @@ def _compute_and_render_totals(
         unsafe_allow_html=True,
     )
 
-    meta = catalog.get("meta", {}) or {}
     if meta.get("category") != "pdq":
         st.markdown(
             "<div class='muted'>All values are placeholders until prices are updated in the catalog.</div>",
@@ -639,6 +694,7 @@ def _compute_and_render_totals(
 
 # ---------- Header ----------
 st.markdown("## Select the type of display")
+debug_mode = st.sidebar.checkbox("Debug pricing (temporary)", value=False, key="debug_pricing")
 
 # ---------- Rows ----------
 for cat_name in ROW_ORDER:
@@ -858,6 +914,7 @@ def render_pdq_form(selected_stem: str) -> None:
         wc_key="wc_idx",
         wc_default=(2, 0),
         unlocked=unlocked,
+        catalog_path=catalog_path,
     )
 
 
@@ -904,6 +961,7 @@ def render_sidekick_form(selected_stem: str) -> None:
         wc_key="sidekick_wc_idx",
         wc_default=(2, 0),
         unlocked=unlocked,
+        catalog_path=catalog_path,
     )
 
 def render_generic_display_form(*, selected_key: str) -> None:
@@ -942,6 +1000,7 @@ def render_generic_display_form(*, selected_key: str) -> None:
         wc_key=f"{category}_{stem}_wc_idx",
         wc_default=(2, 0),
         unlocked=unlocked,
+        catalog_path=catalog_path,
     )
 
 
