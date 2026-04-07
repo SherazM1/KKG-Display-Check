@@ -608,6 +608,68 @@ def _compute_and_render_totals(
         if "/" in selected_key:
             selected_category, selected_stem = selected_key.split("/", 1)
 
+        rules = catalog.get("rules", {}) or {}
+        fp_debug = form.get("footprint")
+        resolved_keys = [str(part_key) for part_key, _ in resolved]
+
+        expected_keys: list[str] = []
+
+        def _append_expected(part_key: object) -> None:
+            p = str(part_key or "").strip()
+            if p and p not in expected_keys:
+                expected_keys.append(p)
+
+        def _fp_rule_part(rule: Dict) -> object:
+            if not isinstance(rule, dict):
+                return None
+            return (rule.get("map", {}) or {}).get(fp_debug, rule.get("else"))
+
+        if fp_debug:
+            _append_expected(_fp_rule_part(rules.get("resolve_footprint_base", {}) or {}))
+
+            if "resolve_hardware" in rules:
+                _append_expected(_fp_rule_part(rules.get("resolve_hardware", {}) or {}))
+
+            r_header = rules.get("resolve_header", {}) or {}
+            if form.get("header") == "header-yes":
+                _append_expected(_fp_rule_part(r_header))
+            else:
+                _append_expected(r_header.get("else"))
+
+            if form.get("shipper") == "shipper-yes":
+                _append_expected(_fp_rule_part(rules.get("resolve_shipper", {}) or {}))
+
+            if int(form.get("shelves_count") or 0) > 0:
+                _append_expected(_fp_rule_part(rules.get("resolve_dividers", {}) or {}))
+
+            r_printed = rules.get("resolve_printed_inside", {}) or {}
+            printed_ctrl = r_printed.get("based_on_control")
+            printed_part = (r_printed.get("map", {}) or {}).get(form.get(printed_ctrl))
+            _append_expected(printed_part)
+
+            if form.get("assembly") == "assembly-turnkey":
+                _append_expected(_fp_rule_part(rules.get("resolve_fulfillment_assemble_sidekick", {}) or {}))
+
+                if form.get("shipper") == "shipper-yes":
+                    _append_expected(_fp_rule_part(rules.get("resolve_fulfillment_packout_sidekick", {}) or {}))
+
+                if form.get("header") == "header-yes":
+                    _append_expected(_fp_rule_part(rules.get("resolve_fulfillment_packout_header", {}) or {}))
+
+                _append_expected(_fp_rule_part(rules.get("resolve_fulfillment_insert_assembly", {}) or {}))
+
+                if int(form.get("product_touches") or 0) > 0:
+                    r_touches = rules.get("resolve_assembly_touches", {}) or {}
+                    touches_part = _fp_rule_part(r_touches)
+                    if not touches_part:
+                        touches_part = r_touches.get("part")
+                    _append_expected(touches_part)
+
+        expected_set = set(expected_keys)
+        resolved_set = set(resolved_keys)
+        missing_keys = [k for k in expected_keys if k not in resolved_set]
+        unexpected_keys = [k for k in resolved_keys if k not in expected_set]
+
         any_fulfillment = any(str(part_key).startswith("fulfill-") for part_key, _ in resolved)
         any_adder_cap = any(
             str((parts.get(part_key, {}) or {}).get("pricing_family") or "").strip() == "fulfillment_adder_cap"
@@ -649,6 +711,18 @@ def _compute_and_render_totals(
             st.write("any_fulfillment:", any_fulfillment)
             st.write("any_adder_cap:", any_adder_cap)
             st.dataframe(rows, use_container_width=True)
+            st.markdown("**expected_keys**")
+            st.markdown(
+                "\n".join(f"- `{k}`" for k in expected_keys) if expected_keys else "- _none_"
+            )
+            st.markdown("**missing_keys**")
+            st.markdown(
+                "\n".join(f"- `{k}`" for k in missing_keys) if missing_keys else "- _none_"
+            )
+            st.markdown("**unexpected_keys**")
+            st.markdown(
+                "\n".join(f"- `{k}`" for k in unexpected_keys) if unexpected_keys else "- _none_"
+            )
             st.write("per_unit_parts_subtotal:", per_unit_parts_subtotal)
             st.write("program_base:", program_base)
             st.write("markup_pct:", markup_pct)

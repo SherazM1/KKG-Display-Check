@@ -326,10 +326,41 @@ def resolve_parts_per_unit(
     parts_value(..., item_qty=qty_per_display) and NOT multiply again.
     """
     rules = catalog.get("rules", {}) or {}
+    parts = catalog.get("parts", {}) or {}
     resolved: List[Tuple[str, int]] = []
 
     fp_key = form.get("footprint")
     width_in, depth_in = footprint_dims
+
+    def _mapped_part(rule: Dict, *, default: object = None) -> object:
+        """
+        Resolve a rule's mapped part in a backward-compatible way.
+        Priority:
+        1) footprint mapping via based_on_control/map_by == "footprint"
+        2) dimension mapping via match_on_dim (width_in/depth_in)
+        3) generic based_on_control mapping
+        4) provided default / rule["else"]
+        """
+        fallback = rule.get("else") if default is None else default
+        mapping = (rule.get("map", {}) or {}) if isinstance(rule, dict) else {}
+
+        if not isinstance(rule, dict):
+            return fallback
+
+        if (rule.get("based_on_control") == "footprint" or rule.get("map_by") == "footprint") and fp_key:
+            return mapping.get(fp_key, fallback)
+
+        match_on_dim = rule.get("match_on_dim")
+        if match_on_dim == "width_in" and width_in is not None:
+            return mapping.get(str(width_in), fallback)
+        if match_on_dim == "depth_in" and depth_in is not None:
+            return mapping.get(str(depth_in), fallback)
+
+        ctrl_id = rule.get("based_on_control")
+        if ctrl_id and ctrl_id != "footprint":
+            return mapping.get(form.get(ctrl_id), fallback)
+
+        return fallback
 
     if fp_key and "resolve_footprint_base" in rules:
         r = rules["resolve_footprint_base"]
@@ -341,8 +372,10 @@ def resolve_parts_per_unit(
         r = rules["resolve_header"]
         part = r.get("else")
         if form.get(r.get("when_control")) == r.get("when_value"):
-            if r.get("match_on_dim") == "width_in" and width_in is not None:
-                part = (r.get("map", {}) or {}).get(str(width_in), r.get("else"))
+            if r.get("based_on_control") == "footprint" and fp_key:
+                part = _mapped_part(r, default=r.get("else"))
+            elif r.get("match_on_dim") == "width_in" and width_in is not None:
+                part = _mapped_part(r, default=r.get("else"))
         if part:
             resolved.append((part, 1))
 
@@ -352,18 +385,24 @@ def resolve_parts_per_unit(
         dqty = _as_int(form.get(qty_ctrl, 0), 0)
         if dqty > 0:
             part = None
-            if r.get("map_by") == "footprint" and fp_key:
-                part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+            if (r.get("based_on_control") == "footprint" or r.get("map_by") == "footprint") and fp_key:
+                part = _mapped_part(r, default=r.get("else"))
             else:
                 if r.get("match_on_dim") == "depth_in" and depth_in is not None:
-                    part = (r.get("map", {}) or {}).get(str(depth_in), r.get("else"))
+                    part = _mapped_part(r, default=r.get("else"))
             if part:
                 resolved.append((part, int(dqty)))
+
+    if "resolve_hardware" in rules and fp_key:
+        r = rules["resolve_hardware"]
+        part = _mapped_part(r, default=r.get("else"))
+        if part:
+            resolved.append((part, 1))
 
     if "resolve_shipper" in rules:
         r = rules["resolve_shipper"]
         if form.get(r.get("when_control")) == r.get("when_value"):
-            part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+            part = _mapped_part(r, default=r.get("else"))
             if part:
                 resolved.append((part, 1))
 
@@ -374,8 +413,8 @@ def resolve_parts_per_unit(
             tqty = _as_int(form.get(tq_ctrl, 0), 0)
             if tqty >= _as_int(r.get("min_quantity", 1), 1):
                 part = None
-                if r.get("map_by") == "footprint" and fp_key:
-                    part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+                if (r.get("based_on_control") == "footprint" or r.get("map_by") == "footprint") and fp_key:
+                    part = _mapped_part(r, default=r.get("else"))
                 else:
                     part = r.get("part")
                 if part:
@@ -398,7 +437,7 @@ def resolve_parts_per_unit(
     if "resolve_fulfillment_packout_header" in rules:
         r = rules["resolve_fulfillment_packout_header"]
         if _when_matches(form, r) and fp_key:
-            part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+            part = _mapped_part(r, default=r.get("else"))
             if part:
                 resolved.append((part, 1))
 
@@ -408,9 +447,45 @@ def resolve_parts_per_unit(
             qty_ctrl = r.get("quantity_control")
             dqty = _as_int(form.get(qty_ctrl, 0), 0)
             if dqty >= _as_int(r.get("min_quantity", 1), 1):
-                part = (r.get("map", {}) or {}).get(fp_key, r.get("else"))
+                part = _mapped_part(r, default=r.get("else"))
                 if part:
                     resolved.append((part, int(dqty)))
+
+    if "resolve_fulfillment_assemble_sidekick" in rules:
+        r = rules["resolve_fulfillment_assemble_sidekick"]
+        if _when_matches(form, r) and fp_key:
+            part = _mapped_part(r, default=r.get("else"))
+            if part:
+                resolved.append((part, 1))
+
+    if "resolve_fulfillment_packout_sidekick" in rules:
+        r = rules["resolve_fulfillment_packout_sidekick"]
+        if _when_matches(form, r) and fp_key:
+            part = _mapped_part(r, default=r.get("else"))
+            if part:
+                resolved.append((part, 1))
+
+    if "resolve_fulfillment_insert_assembly" in rules:
+        r = rules["resolve_fulfillment_insert_assembly"]
+        if _when_matches(form, r) and fp_key:
+            qty_ctrl = r.get("quantity_control")
+            count = _as_int(form.get(qty_ctrl, 0), 0) if qty_ctrl else 0
+            if count >= _as_int(r.get("min_quantity", 1), 1):
+                part = _mapped_part(r, default=r.get("else"))
+                if part:
+                    part_spec = parts.get(part, {}) or {}
+                    pricing_family = str(part_spec.get("pricing_family") or "").strip()
+                    if pricing_family == "fulfillment_fixed_per_display":
+                        resolved.append((part, 1))
+                    else:
+                        resolved.append((part, int(count)))
+
+    if "resolve_fulfillment_insert_assembly_built_in_defaults" in rules:
+        r = rules["resolve_fulfillment_insert_assembly_built_in_defaults"]
+        if _when_matches(form, r) and fp_key:
+            part = _mapped_part(r, default=r.get("else"))
+            if part:
+                resolved.append((part, 1))
 
     if "resolve_printed_inside" in rules:
         r = rules["resolve_printed_inside"]
