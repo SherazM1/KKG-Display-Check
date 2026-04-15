@@ -776,6 +776,21 @@ for cat_name in ROW_ORDER:
     st.markdown(f"### {ROW_TITLES.get(cat_name, cat_name.title())}")
 
     tiles = gallery.scan_category_pngs(ASSETS_ROOT, cat_name, label_overrides=LABEL_OVERRIDES)
+    if cat_name == "halfpallet":
+        dumpbin_path = f"{ASSETS_ROOT}/dumpbin/dump_bin.png"
+        try:
+            with open(dumpbin_path, "rb"):
+                pass
+            tiles.append(
+                gallery.OptionTile(
+                    key="halfpallet/dump_bin",
+                    label=LABEL_OVERRIDES.get("dump_bin", "Half Pallet Dump Bin"),
+                    path=dumpbin_path,
+                    category="halfpallet",
+                )
+            )
+        except OSError:
+            pass
     if not tiles:
         st.caption(f"No images found in `{ASSETS_ROOT}/{cat_name}`.")
         continue
