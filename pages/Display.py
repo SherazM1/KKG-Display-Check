@@ -29,12 +29,12 @@ st.markdown(
 
 ASSETS_ROOT = "assets/references"
 
-ROW_ORDER = ["pdq", "sidekick", "halfpallet", "dumpbin"]
+ROW_ORDER = ["pdq", "sidekick", "halfpallet", "quarterpallet"]
 ROW_TITLES = {
     "pdq": "PDQs",
     "sidekick": "Sidekicks",
     "halfpallet": "Half Pallets",
-    "dumpbin": "Dump Bins",
+    "quarterpallet": "Quarter Pallets",
 }
 
 LABEL_OVERRIDES = {
@@ -51,8 +51,12 @@ LABEL_OVERRIDES = {
     # --- Half Pallets ---
     "frontfaced_hp": "Front-Faced Half Pallet",
     "threesided_hp": "Three-Sided Half Pallet",
-    # --- Dump Bins ---
     "dump_bin": "Half Pallet Dump Bin",
+    # --- Quarter Pallets ---
+    "qp-shroud": "Quarter Pallet - Shroud",
+    "qp-shelved": "Quarter Pallet - Shelved",
+    "qp-stacked-trays": "Quarter Pallet - Stacked",
+    "qp-dumpbin": "Quarter Pallet Dump Bin",
 }
 
 PDQ_CATALOG_BY_STEM = {
@@ -86,9 +90,6 @@ PDQ_MULTIPLIER_BY_TYPE = {
 HALFPALLET_CATALOG_BY_STEM = {
     "frontfaced_hp": "data/catalog/frontfaced_hp.json",
     "threesided_hp": "data/catalog/threesided_hp.json",
-}
-
-DUMPBIN_CATALOG_BY_STEM = {
     "dump_bin": "data/catalog/dump_bin.json",
 }
 
@@ -779,10 +780,12 @@ for cat_name in ROW_ORDER:
         st.caption(f"No images found in `{ASSETS_ROOT}/{cat_name}`.")
         continue
 
-    cols = st.columns(4, gap="large")
-    for i, t in enumerate(tiles[:4]):
-        with cols[i]:
-            gallery.render_tile(t, preview_w=640, preview_h=460)
+    for row_start in range(0, len(tiles), 4):
+        row_tiles = tiles[row_start : row_start + 4]
+        cols = st.columns(4, gap="large")
+        for i, t in enumerate(row_tiles):
+            with cols[i]:
+                gallery.render_tile(t, preview_w=640, preview_h=460)
 
 selected_key: Optional[str] = st.session_state.get("selected_display_key")
 
@@ -808,8 +811,8 @@ def _catalog_path_for_tile(category: str, stem: str) -> Optional[str]:
         return SIDEKICK_SHARED_CATALOG_PATH
     if category == "halfpallet":
         return HALFPALLET_CATALOG_BY_STEM.get(stem)
-    if category == "dumpbin":
-        return DUMPBIN_CATALOG_BY_STEM.get(stem)
+    if category == "quarterpallet":
+        return None
     return None
 
 
@@ -1087,7 +1090,7 @@ elif selected_key and selected_key.startswith("sidekick/"):
     stem = selected_key.split("/", 1)[1]
     render_sidekick_form(stem)
 
-elif selected_key and (selected_key.startswith("halfpallet/") or selected_key.startswith("dumpbin/")):
+elif selected_key and selected_key.startswith("halfpallet/"):
     render_generic_display_form(selected_key=selected_key)
 
 elif selected_key:
