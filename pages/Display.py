@@ -786,7 +786,10 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
         return
 
     st.markdown("### Sales Mockup Preview")
-    st.caption("Demo preview: extract colors from a reference image and dress the selected display pieces.")
+    st.caption(
+        "Demo preview: extract colors from a reference image and dress the selected display pieces. "
+        "Graphic fills use the detected artwork area from the uploaded reference image."
+    )
 
     if not visualizer.template_available("sidekick_shelves"):
         st.warning(
@@ -895,7 +898,7 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             "header": "Graphic",
             "body_panels": "Color",
             "shelf_lips": "Graphic",
-            "base": "Graphic",
+            "base": "Color",
         }
         for zone_key, zone in template["zones"].items():
             zone_modes[zone_key] = st.selectbox(

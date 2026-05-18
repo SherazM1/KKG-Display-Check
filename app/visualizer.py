@@ -72,15 +72,16 @@ def _white_background(size: tuple[int, int]) -> Image.Image:
     return Image.new("RGBA", size, (255, 255, 255, 255))
 
 
-def _extract_line_art(base: Image.Image) -> Image.Image:
+def _extract_line_art(base: Image.Image, *, opacity: float = 0.40) -> Image.Image:
     rgba_base = base.convert("RGBA")
     grayscale = rgba_base.convert("L")
     original_alpha = rgba_base.getchannel("A")
+    opacity = max(0.0, min(1.0, opacity))
 
     computed_alpha = Image.new("L", rgba_base.size)
     computed_alpha.putdata(
         [
-            round(max(0, min(255, (205 - luminance) * 2.2)) * (alpha / 255))
+            round(max(0, min(255, (185 - luminance) * 2.4)) * (alpha / 255) * opacity)
             for luminance, alpha in zip(grayscale.getdata(), original_alpha.getdata())
         ]
     )
@@ -135,6 +136,121 @@ def _open_reference_image(image_file: Optional[BinaryIO]) -> Optional[Image.Imag
         return None
 
 
+def extract_reference_art_crop(image_file_or_image: BinaryIO | Image.Image) -> Image.Image:
+    if isinstance(image_file_or_image, Image.Image):
+        source = image_file_or_image.convert("RGBA")
+    else:
+        opened = _open_reference_image(image_file_or_image)
+        if opened is None:
+            raise ValueError("Could not open reference image.")
+        source = opened
+
+    meaningful = Image.new("L", source.size)
+    meaningful.putdata(
+        [
+            255
+            if alpha >= 32
+            and not (red > 242 and green > 242 and blue > 242)
+            and not (
+                max(red, green, blue) > 224
+                and max(red, green, blue) - min(red, green, blue) < 18
+            )
+            else 0
+            for red, green, blue, alpha in source.getdata()
+        ]
+    )
+    bbox = _largest_component_bbox(meaningful)
+    if not bbox:
+        return source
+
+    left, top, right, bottom = bbox
+    pad_x = max(4, round((right - left) * 0.04))
+    pad_y = max(4, round((bottom - top) * 0.04))
+    return source.crop(
+        (
+            max(0, left - pad_x),
+            max(0, top - pad_y),
+            min(source.width, right + pad_x),
+            min(source.height, bottom + pad_y),
+        )
+    )
+
+
+def _largest_component_bbox(mask: Image.Image) -> Optional[tuple[int, int, int, int]]:
+    width, height = mask.size
+    scale = min(1.0, 320 / max(width, height))
+    if scale < 1.0:
+        reduced = mask.resize(
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            Image.Resampling.NEAREST,
+        )
+    else:
+        reduced = mask
+
+    rw, rh = reduced.size
+    pixels = reduced.load()
+    visited: set[tuple[int, int]] = set()
+    largest: tuple[int, int, int, int, int] | None = None
+
+    for y in range(rh):
+        for x in range(rw):
+            if pixels[x, y] == 0 or (x, y) in visited:
+                continue
+
+            stack = [(x, y)]
+            visited.add((x, y))
+            min_x = max_x = x
+            min_y = max_y = y
+            count = 0
+
+            while stack:
+                cx, cy = stack.pop()
+                count += 1
+                min_x = min(min_x, cx)
+                max_x = max(max_x, cx)
+                min_y = min(min_y, cy)
+                max_y = max(max_y, cy)
+                for nx in range(max(0, cx - 1), min(rw, cx + 2)):
+                    for ny in range(max(0, cy - 1), min(rh, cy + 2)):
+                        if pixels[nx, ny] and (nx, ny) not in visited:
+                            visited.add((nx, ny))
+                            stack.append((nx, ny))
+
+            if largest is None or count > largest[0]:
+                largest = (count, min_x, min_y, max_x + 1, max_y + 1)
+
+    if largest is None:
+        return None
+
+    _, left, top, right, bottom = largest
+    if scale < 1.0:
+        return (
+            max(0, round(left / scale)),
+            max(0, round(top / scale)),
+            min(width, round(right / scale)),
+            min(height, round(bottom / scale)),
+        )
+    return (left, top, right, bottom)
+
+
+def derive_reference_art_regions(reference_art: Image.Image) -> dict[str, Image.Image]:
+    art = reference_art.convert("RGBA")
+    width, height = art.size
+    if width <= 0 or height <= 0:
+        return {"header_art": art, "shelf_strip": art, "base_strip": art}
+
+    header_top = round(height * 0.10)
+    header_bottom = max(header_top + 1, round(height * 0.62))
+    lower_third = round(height * 0.60)
+    base_top = round(height * 0.72)
+
+    return {
+        "header_art": art.crop((0, header_top, width, header_bottom)),
+        "shelf_strip": art.crop((0, lower_third, width, height)),
+        "base_strip": art.crop((0, base_top, width, height)),
+    }
+
+
 def _mask_bbox(mask: Image.Image) -> Optional[tuple[int, int, int, int]]:
     return mask.getbbox()
 
@@ -155,15 +271,6 @@ def _cover_resize(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return resized.crop((left, top, left + target_w, top + target_h))
 
 
-def _reference_crop(reference: Image.Image, zone_key: str) -> Image.Image:
-    width, height = reference.size
-    if zone_key == "header":
-        return reference.crop((0, 0, width, max(1, round(height * 0.48))))
-    if zone_key in {"shelf_lips", "base"}:
-        return reference.crop((0, round(height * 0.62), width, height))
-    return reference.crop((0, round(height * 0.18), width, round(height * 0.82)))
-
-
 def _repeat_strip(strip: Image.Image, size: tuple[int, int]) -> Image.Image:
     target_w, target_h = size
     fitted = _cover_resize(strip, (max(1, round(strip.width * target_h / max(strip.height, 1))), target_h))
@@ -175,19 +282,18 @@ def _repeat_strip(strip: Image.Image, size: tuple[int, int]) -> Image.Image:
     return repeated.crop((0, 0, target_w, target_h))
 
 
-def _graphic_piece(piece: Image.Image, reference: Image.Image, zone_key: str) -> Optional[Image.Image]:
+def _graphic_piece(piece: Image.Image, graphic: Image.Image, zone_key: str) -> Optional[Image.Image]:
     alpha = _piece_alpha(piece)
     bbox = _mask_bbox(alpha)
     if not bbox:
         return None
 
     left, top, right, bottom = bbox
-    crop = _reference_crop(reference, zone_key)
     fill_size = (right - left, bottom - top)
     if zone_key in {"shelf_lips", "base"}:
-        fill = _repeat_strip(crop, fill_size)
+        fill = _repeat_strip(graphic, fill_size)
     else:
-        fill = _cover_resize(crop, fill_size)
+        fill = _cover_resize(graphic, fill_size)
 
     graphic = Image.new("RGBA", piece.size, (0, 0, 0, 0))
     graphic.alpha_composite(fill, (left, top))
@@ -257,6 +363,8 @@ def render_preview(
         base = base_source.convert("RGBA")
 
     reference = _open_reference_image(reference_image)
+    reference_art = extract_reference_art_crop(reference) if reference is not None else None
+    regions = derive_reference_art_regions(reference_art) if reference_art is not None else {}
     modes = {**_DEFAULT_ZONE_MODES, **(zone_modes or {})}
     result = _white_background(base.size)
     for zone_key in _RENDER_ORDER:
@@ -267,8 +375,14 @@ def render_preview(
             str(zone_colors.get(zone_key) or "#000000"),
             strength=overlay_opacity,
         )
-        if modes.get(zone_key) == "graphic" and reference is not None:
-            graphic_piece = _graphic_piece(piece, reference, zone_key)
+        if modes.get(zone_key) == "graphic" and reference_art is not None:
+            graphic_source = {
+                "header": regions.get("header_art"),
+                "shelf_lips": regions.get("shelf_strip"),
+                "base": regions.get("base_strip"),
+                "body_panels": reference_art,
+            }.get(zone_key)
+            graphic_piece = _graphic_piece(piece, graphic_source, zone_key) if graphic_source is not None else None
             if graphic_piece is not None:
                 rendered_piece = graphic_piece
         result.alpha_composite(rendered_piece)
