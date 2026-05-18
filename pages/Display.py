@@ -9,6 +9,7 @@ import streamlit as st
 from app import catalog as cat
 from app import gallery
 from app import pricing
+from app import visualizer
 
 # ---------- Page setup ----------
 st.set_page_config(page_title="Display · KKG", layout="wide")
@@ -767,6 +768,92 @@ def _compute_and_render_totals(
         )
 
 
+def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
+    selected_display_key = str(st.session_state.get("selected_display_key") or "")
+    shelves_footprints = {
+        "sk-24-shelves-rolled",
+        "sk-24-shelves-built",
+        "sk-48-shelves-rolled",
+        "sk-48-shelves-built",
+    }
+    is_sidekick_shelves = selected_display_key.startswith("sidekick/") and (
+        "sidekickshelves" in selected_display_key
+        or form.get("footprint") in shelves_footprints
+    )
+    if not is_sidekick_shelves:
+        return
+
+    st.markdown("### Visual Preview")
+    st.caption("Demo preview: extract colors from a reference image and apply them to known display zones.")
+
+    if not visualizer.template_available("sidekick_shelves"):
+        st.warning(
+            "Visual preview template files are not available yet. Expected folder: "
+            "`assets/visual_templates/sidekick_shelves/` with "
+            "`base.png`, `mask_header.png`, `mask_body_panels.png`, "
+            "`mask_shelf_lips.png`, and `mask_base.png`."
+        )
+        return
+
+    uploaded_image = st.file_uploader(
+        "Upload reference image",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"sidekick_visual_reference_{selected_stem}",
+    )
+    palette = visualizer.extract_palette(uploaded_image, max_colors=6) if uploaded_image else []
+
+    if palette:
+        st.caption("Extracted colors")
+        swatch_cols = st.columns(len(palette))
+        for idx, color in enumerate(palette):
+            with swatch_cols[idx]:
+                st.markdown(
+                    (
+                        "<div style='height:44px; border:1px solid #d1d5db; "
+                        f"border-radius:6px; background:{html.escape(color)};'></div>"
+                        f"<div style='font-size:12px; margin-top:4px;'>{html.escape(color)}</div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+    default_colors = {
+        "header": palette[1] if len(palette) > 1 else "#D8C58A",
+        "body_panels": palette[0] if len(palette) > 0 else "#6F7F35",
+        "shelf_lips": palette[3] if len(palette) > 3 else "#B83A68",
+        "base": palette[0] if len(palette) > 0 else "#6F7F35",
+    }
+    palette_signature_key = f"sidekick_visual_palette_signature_{selected_stem}"
+    palette_signature = tuple(palette)
+    if palette and st.session_state.get(palette_signature_key) != palette_signature:
+        for zone_key, default_color in default_colors.items():
+            st.session_state[f"sidekick_visual_zone_{selected_stem}_{zone_key}"] = default_color
+        st.session_state[palette_signature_key] = palette_signature
+
+    template = visualizer.get_template("sidekick_shelves")
+    zone_colors: dict[str, str] = {}
+    for zone_key, zone in template["zones"].items():
+        zone_colors[zone_key] = st.color_picker(
+            zone["label"],
+            value=default_colors[zone_key],
+            key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
+        )
+
+    if st.button("Render Visual Preview", key=f"sidekick_visual_render_{selected_stem}"):
+        preview = visualizer.render_preview("sidekick_shelves", zone_colors)
+        st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(preview)
+
+    preview_png = st.session_state.get("sidekick_visual_preview_png")
+    if preview_png:
+        st.image(preview_png)
+        st.download_button(
+            "Download Preview PNG",
+            data=preview_png,
+            file_name="sidekick_visual_preview.png",
+            mime="image/png",
+            key=f"sidekick_visual_download_{selected_stem}",
+        )
+
+
 # ---------- Header ----------
 st.markdown("## Select the type of display")
 debug_mode = st.sidebar.checkbox("Debug pricing (temporary)", value=False, key="debug_pricing")
@@ -1054,6 +1141,11 @@ def render_sidekick_form(selected_stem: str) -> None:
         wc_default=(2, 0),
         unlocked=unlocked,
         catalog_path=catalog_path,
+    )
+
+    _render_sidekick_visual_preview(
+        form=form,
+        selected_stem=selected_stem,
     )
 
 def render_generic_display_form(*, selected_key: str) -> None:
