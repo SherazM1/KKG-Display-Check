@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import colorsys
 import html
+from io import BytesIO
 from typing import Dict, Optional, Tuple
 
 import streamlit as st
@@ -805,6 +806,7 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             key=f"sidekick_visual_reference_{selected_stem}",
         )
         palette = visualizer.extract_palette(uploaded_image, max_colors=6) if uploaded_image else []
+        uploaded_image_bytes = uploaded_image.getvalue() if uploaded_image else None
 
         if palette:
             st.caption("Extracted colors")
@@ -888,7 +890,20 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     with left_col:
         template = visualizer.get_template("sidekick_shelves")
         zone_colors: dict[str, str] = {}
+        zone_modes: dict[str, str] = {}
+        default_modes = {
+            "header": "Graphic",
+            "body_panels": "Color",
+            "shelf_lips": "Graphic",
+            "base": "Graphic",
+        }
         for zone_key, zone in template["zones"].items():
+            zone_modes[zone_key] = st.selectbox(
+                f"{zone['label']} Fill",
+                ["Color", "Graphic"],
+                index=0 if default_modes[zone_key] == "Color" else 1,
+                key=f"sidekick_visual_mode_{selected_stem}_{zone_key}",
+            ).lower()
             zone_colors[zone_key] = st.color_picker(
                 zone["label"],
                 value=default_colors[zone_key],
@@ -896,7 +911,12 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             )
 
         if st.button("Render Sales Mockup", key=f"sidekick_visual_render_{selected_stem}"):
-            preview = visualizer.render_preview("sidekick_shelves", zone_colors)
+            preview = visualizer.render_preview(
+                "sidekick_shelves",
+                zone_colors,
+                reference_image=BytesIO(uploaded_image_bytes) if uploaded_image_bytes else None,
+                zone_modes=zone_modes,
+            )
             st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(preview)
 
     with right_col:

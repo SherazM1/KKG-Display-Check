@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 
 from PIL import Image
 
@@ -34,6 +34,12 @@ _TEMPLATES = {
 }
 
 _RENDER_ORDER = ("body_panels", "base", "header", "shelf_lips")
+_DEFAULT_ZONE_MODES = {
+    "header": "graphic",
+    "body_panels": "color",
+    "shelf_lips": "graphic",
+    "base": "graphic",
+}
 
 
 def get_template(template_id: str) -> dict:
@@ -74,7 +80,7 @@ def _extract_line_art(base: Image.Image) -> Image.Image:
     computed_alpha = Image.new("L", rgba_base.size)
     computed_alpha.putdata(
         [
-            round(max(0, min(255, (220 - luminance) * 2.0)) * (alpha / 255))
+            round(max(0, min(255, (205 - luminance) * 2.2)) * (alpha / 255))
             for luminance, alpha in zip(grayscale.getdata(), original_alpha.getdata())
         ]
     )
@@ -115,6 +121,79 @@ def _tint_piece(piece: Image.Image, color_hex: str, *, strength: float = 0.72) -
     tinted_piece = tinted_rgb.convert("RGBA")
     tinted_piece.putalpha(alpha)
     return tinted_piece
+
+
+def _open_reference_image(image_file: Optional[BinaryIO]) -> Optional[Image.Image]:
+    if image_file is None:
+        return None
+    try:
+        if hasattr(image_file, "seek"):
+            image_file.seek(0)
+        with Image.open(image_file) as source:
+            return source.convert("RGBA")
+    except Exception:
+        return None
+
+
+def _mask_bbox(mask: Image.Image) -> Optional[tuple[int, int, int, int]]:
+    return mask.getbbox()
+
+
+def _cover_resize(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    target_w, target_h = size
+    if target_w <= 0 or target_h <= 0:
+        return Image.new("RGBA", size, (0, 0, 0, 0))
+
+    source_w, source_h = image.size
+    scale = max(target_w / source_w, target_h / source_h)
+    resized = image.resize(
+        (max(1, round(source_w * scale)), max(1, round(source_h * scale))),
+        Image.Resampling.LANCZOS,
+    )
+    left = max(0, (resized.width - target_w) // 2)
+    top = max(0, (resized.height - target_h) // 2)
+    return resized.crop((left, top, left + target_w, top + target_h))
+
+
+def _reference_crop(reference: Image.Image, zone_key: str) -> Image.Image:
+    width, height = reference.size
+    if zone_key == "header":
+        return reference.crop((0, 0, width, max(1, round(height * 0.48))))
+    if zone_key in {"shelf_lips", "base"}:
+        return reference.crop((0, round(height * 0.62), width, height))
+    return reference.crop((0, round(height * 0.18), width, round(height * 0.82)))
+
+
+def _repeat_strip(strip: Image.Image, size: tuple[int, int]) -> Image.Image:
+    target_w, target_h = size
+    fitted = _cover_resize(strip, (max(1, round(strip.width * target_h / max(strip.height, 1))), target_h))
+    repeated = Image.new("RGBA", size, (0, 0, 0, 0))
+    x = 0
+    while x < target_w:
+        repeated.alpha_composite(fitted, (x, 0))
+        x += fitted.width
+    return repeated.crop((0, 0, target_w, target_h))
+
+
+def _graphic_piece(piece: Image.Image, reference: Image.Image, zone_key: str) -> Optional[Image.Image]:
+    alpha = _piece_alpha(piece)
+    bbox = _mask_bbox(alpha)
+    if not bbox:
+        return None
+
+    left, top, right, bottom = bbox
+    crop = _reference_crop(reference, zone_key)
+    fill_size = (right - left, bottom - top)
+    if zone_key in {"shelf_lips", "base"}:
+        fill = _repeat_strip(crop, fill_size)
+    else:
+        fill = _cover_resize(crop, fill_size)
+
+    graphic = Image.new("RGBA", piece.size, (0, 0, 0, 0))
+    graphic.alpha_composite(fill, (left, top))
+    masked = Image.new("RGBA", piece.size, (0, 0, 0, 0))
+    masked.paste(graphic, mask=alpha)
+    return masked
 
 
 def extract_palette(image_file: BinaryIO, *, max_colors: int = 6) -> list[str]:
@@ -169,22 +248,30 @@ def render_preview(
     template_id: str,
     zone_colors: dict[str, str],
     *,
+    reference_image: Optional[BinaryIO] = None,
+    zone_modes: Optional[dict[str, str]] = None,
     overlay_opacity: float = 0.70,
 ) -> Image.Image:
     template = get_template(template_id)
     with Image.open(template["base_image"]) as base_source:
         base = base_source.convert("RGBA")
 
+    reference = _open_reference_image(reference_image)
+    modes = {**_DEFAULT_ZONE_MODES, **(zone_modes or {})}
     result = _white_background(base.size)
     for zone_key in _RENDER_ORDER:
         zone = template["zones"][zone_key]
         piece = _load_piece_layer(zone["mask"], base.size)
-        tinted_piece = _tint_piece(
+        rendered_piece = _tint_piece(
             piece,
             str(zone_colors.get(zone_key) or "#000000"),
             strength=overlay_opacity,
         )
-        result.alpha_composite(tinted_piece)
+        if modes.get(zone_key) == "graphic" and reference is not None:
+            graphic_piece = _graphic_piece(piece, reference, zone_key)
+            if graphic_piece is not None:
+                rendered_piece = graphic_piece
+        result.alpha_composite(rendered_piece)
 
     result.alpha_composite(_extract_line_art(base))
 
