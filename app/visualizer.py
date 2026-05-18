@@ -33,6 +33,8 @@ _TEMPLATES = {
     }
 }
 
+_RENDER_ORDER = ("body_panels", "base", "header", "shelf_lips")
+
 
 def get_template(template_id: str) -> dict:
     try:
@@ -60,12 +62,59 @@ def _color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> 
     return sum((a - b) ** 2 for a, b in zip(left, right)) ** 0.5
 
 
-def _mask_to_alpha(mask_source: Image.Image) -> Image.Image:
-    rgba_mask = mask_source.convert("RGBA")
-    alpha = rgba_mask.getchannel("A")
+def _white_background(size: tuple[int, int]) -> Image.Image:
+    return Image.new("RGBA", size, (255, 255, 255, 255))
+
+
+def _extract_line_art(base: Image.Image) -> Image.Image:
+    rgba_base = base.convert("RGBA")
+    grayscale = rgba_base.convert("L")
+    original_alpha = rgba_base.getchannel("A")
+
+    computed_alpha = Image.new("L", rgba_base.size)
+    computed_alpha.putdata(
+        [
+            round(max(0, min(255, (220 - luminance) * 2.0)) * (alpha / 255))
+            for luminance, alpha in zip(grayscale.getdata(), original_alpha.getdata())
+        ]
+    )
+
+    line_art = rgba_base.copy()
+    line_art.putalpha(computed_alpha)
+    return line_art
+
+
+def _load_piece_layer(path: str, base_size: tuple[int, int]) -> Image.Image:
+    with Image.open(path) as source:
+        piece = source.convert("RGBA")
+    if piece.size != base_size:
+        piece = piece.resize(base_size, Image.Resampling.LANCZOS)
+    return piece
+
+
+def _piece_alpha(piece: Image.Image) -> Image.Image:
+    rgba_piece = piece.convert("RGBA")
+    alpha = rgba_piece.getchannel("A")
     if alpha.getextrema()[0] < 255:
         return alpha
-    return rgba_mask.convert("L")
+    return rgba_piece.convert("L")
+
+
+def _tint_piece(piece: Image.Image, color_hex: str, *, strength: float = 0.72) -> Image.Image:
+    rgba_piece = piece.convert("RGBA")
+    alpha = _piece_alpha(rgba_piece)
+    strength = max(0.0, min(1.0, strength))
+
+    try:
+        color = Image.new("RGB", rgba_piece.size, color_hex)
+    except ValueError:
+        color = Image.new("RGB", rgba_piece.size, "#000000")
+
+    original_rgb = rgba_piece.convert("RGB")
+    tinted_rgb = Image.blend(original_rgb, color, strength)
+    tinted_piece = tinted_rgb.convert("RGBA")
+    tinted_piece.putalpha(alpha)
+    return tinted_piece
 
 
 def extract_palette(image_file: BinaryIO, *, max_colors: int = 6) -> list[str]:
@@ -120,28 +169,24 @@ def render_preview(
     template_id: str,
     zone_colors: dict[str, str],
     *,
-    overlay_opacity: float = 0.55,
+    overlay_opacity: float = 0.70,
 ) -> Image.Image:
     template = get_template(template_id)
     with Image.open(template["base_image"]) as base_source:
         base = base_source.convert("RGBA")
-    opacity = max(0.0, min(1.0, overlay_opacity))
 
-    result = base.copy()
-    for zone_key, zone in template["zones"].items():
-        with Image.open(zone["mask"]) as mask_source:
-            mask = _mask_to_alpha(mask_source)
-        if mask.size != base.size:
-            mask = mask.resize(base.size, Image.Resampling.LANCZOS)
+    result = _white_background(base.size)
+    for zone_key in _RENDER_ORDER:
+        zone = template["zones"][zone_key]
+        piece = _load_piece_layer(zone["mask"], base.size)
+        tinted_piece = _tint_piece(
+            piece,
+            str(zone_colors.get(zone_key) or "#000000"),
+            strength=overlay_opacity,
+        )
+        result.alpha_composite(tinted_piece)
 
-        zone_color = str(zone_colors.get(zone_key) or "#000000")
-        try:
-            rgb = Image.new("RGBA", (1, 1), zone_color).getpixel((0, 0))[:3]
-        except ValueError:
-            rgb = Image.new("RGBA", (1, 1), "#000000").getpixel((0, 0))[:3]
-        overlay = Image.new("RGBA", base.size, (*rgb, 255))
-        alpha_mask = mask.point(lambda value: round(value * opacity))
-        result = Image.composite(overlay, result, alpha_mask)
+    result.alpha_composite(_extract_line_art(base))
 
     return result
 

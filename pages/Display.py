@@ -1,6 +1,7 @@
 ﻿# pages/Display.py
 from __future__ import annotations
 
+import colorsys
 import html
 from typing import Dict, Optional, Tuple
 
@@ -783,8 +784,8 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     if not is_sidekick_shelves:
         return
 
-    st.markdown("### Visual Preview")
-    st.caption("Demo preview: extract colors from a reference image and apply them to known display zones.")
+    st.markdown("### Sales Mockup Preview")
+    st.caption("Demo preview: extract colors from a reference image and dress the selected display pieces.")
 
     if not visualizer.template_available("sidekick_shelves"):
         st.warning(
@@ -795,33 +796,88 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
         )
         return
 
-    uploaded_image = st.file_uploader(
-        "Upload reference image",
-        type=["png", "jpg", "jpeg", "webp"],
-        key=f"sidekick_visual_reference_{selected_stem}",
-    )
-    palette = visualizer.extract_palette(uploaded_image, max_colors=6) if uploaded_image else []
+    left_col, right_col = st.columns([0.46, 0.54], gap="large")
 
-    if palette:
-        st.caption("Extracted colors")
-        swatch_cols = st.columns(len(palette))
-        for idx, color in enumerate(palette):
-            with swatch_cols[idx]:
-                st.markdown(
-                    (
-                        "<div style='height:44px; border:1px solid #d1d5db; "
-                        f"border-radius:6px; background:{html.escape(color)};'></div>"
-                        f"<div style='font-size:12px; margin-top:4px;'>{html.escape(color)}</div>"
-                    ),
-                    unsafe_allow_html=True,
+    with left_col:
+        uploaded_image = st.file_uploader(
+            "Upload reference image",
+            type=["png", "jpg", "jpeg", "webp"],
+            key=f"sidekick_visual_reference_{selected_stem}",
+        )
+        palette = visualizer.extract_palette(uploaded_image, max_colors=6) if uploaded_image else []
+
+        if palette:
+            st.caption("Extracted colors")
+            swatch_html = "".join(
+                (
+                    "<div style='display:inline-flex; flex-direction:column; align-items:center; "
+                    "gap:4px; margin:0 10px 10px 0;'>"
+                    f"<div style='width:48px; height:28px; border:1px solid #d1d5db; border-radius:6px; background:{html.escape(color)};'></div>"
+                    f"<div style='font-size:12px;'>{html.escape(color)}</div>"
+                    "</div>"
                 )
+                for color in palette
+            )
+            st.markdown(f"<div>{swatch_html}</div>", unsafe_allow_html=True)
 
-    default_colors = {
-        "header": palette[1] if len(palette) > 1 else "#D8C58A",
-        "body_panels": palette[0] if len(palette) > 0 else "#6F7F35",
-        "shelf_lips": palette[3] if len(palette) > 3 else "#B83A68",
-        "base": palette[0] if len(palette) > 0 else "#6F7F35",
-    }
+    def _suggest_sidekick_zone_colors(colors: list[str]) -> dict[str, str]:
+        fallback = {
+            "body_panels": "#6F7F35",
+            "header": "#D8C58A",
+            "shelf_lips": "#B83A68",
+            "base": "#4F5F2E",
+        }
+        parsed: list[tuple[str, float, float, float]] = []
+        for color in colors:
+            try:
+                red = int(color[1:3], 16) / 255
+                green = int(color[3:5], 16) / 255
+                blue = int(color[5:7], 16) / 255
+            except (ValueError, TypeError):
+                continue
+            hue, lightness, saturation = colorsys.rgb_to_hls(red, green, blue)
+            parsed.append((color, hue * 360, lightness, saturation))
+
+        body = next(
+            (
+                color
+                for color, hue, lightness, saturation in parsed
+                if 55 <= hue <= 150 and saturation >= 0.20 and lightness <= 0.68
+            ),
+            fallback["body_panels"],
+        )
+        header = next(
+            (
+                color
+                for color, hue, lightness, saturation in parsed
+                if 25 <= hue <= 60 and lightness >= 0.45 and saturation >= 0.10
+            ),
+            fallback["header"],
+        )
+        shelf_lips = next(
+            (
+                color
+                for color, hue, lightness, saturation in parsed
+                if (hue >= 320 or hue <= 15) and saturation >= 0.25
+            ),
+            header,
+        )
+        base = next(
+            (
+                color
+                for color, hue, lightness, saturation in parsed
+                if 55 <= hue <= 150 and saturation >= 0.20 and lightness <= 0.50
+            ),
+            body or fallback["base"],
+        )
+        return {
+            "header": header,
+            "body_panels": body,
+            "shelf_lips": shelf_lips,
+            "base": base,
+        }
+
+    default_colors = _suggest_sidekick_zone_colors(palette)
     palette_signature_key = f"sidekick_visual_palette_signature_{selected_stem}"
     palette_signature = tuple(palette)
     if palette and st.session_state.get(palette_signature_key) != palette_signature:
@@ -829,29 +885,31 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             st.session_state[f"sidekick_visual_zone_{selected_stem}_{zone_key}"] = default_color
         st.session_state[palette_signature_key] = palette_signature
 
-    template = visualizer.get_template("sidekick_shelves")
-    zone_colors: dict[str, str] = {}
-    for zone_key, zone in template["zones"].items():
-        zone_colors[zone_key] = st.color_picker(
-            zone["label"],
-            value=default_colors[zone_key],
-            key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
-        )
+    with left_col:
+        template = visualizer.get_template("sidekick_shelves")
+        zone_colors: dict[str, str] = {}
+        for zone_key, zone in template["zones"].items():
+            zone_colors[zone_key] = st.color_picker(
+                zone["label"],
+                value=default_colors[zone_key],
+                key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
+            )
 
-    if st.button("Render Visual Preview", key=f"sidekick_visual_render_{selected_stem}"):
-        preview = visualizer.render_preview("sidekick_shelves", zone_colors)
-        st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(preview)
+        if st.button("Render Sales Mockup", key=f"sidekick_visual_render_{selected_stem}"):
+            preview = visualizer.render_preview("sidekick_shelves", zone_colors)
+            st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(preview)
 
-    preview_png = st.session_state.get("sidekick_visual_preview_png")
-    if preview_png:
-        st.image(preview_png)
-        st.download_button(
-            "Download Preview PNG",
-            data=preview_png,
-            file_name="sidekick_visual_preview.png",
-            mime="image/png",
-            key=f"sidekick_visual_download_{selected_stem}",
-        )
+    with right_col:
+        preview_png = st.session_state.get("sidekick_visual_preview_png")
+        if preview_png:
+            st.image(preview_png)
+            st.download_button(
+                "Download Preview PNG",
+                data=preview_png,
+                file_name="sidekick_visual_preview.png",
+                mime="image/png",
+                key=f"sidekick_visual_download_{selected_stem}",
+            )
 
 
 # ---------- Header ----------
