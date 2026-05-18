@@ -60,6 +60,14 @@ def _color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> 
     return sum((a - b) ** 2 for a, b in zip(left, right)) ** 0.5
 
 
+def _mask_to_alpha(mask_source: Image.Image) -> Image.Image:
+    rgba_mask = mask_source.convert("RGBA")
+    alpha = rgba_mask.getchannel("A")
+    if alpha.getextrema()[0] < 255:
+        return alpha
+    return rgba_mask.convert("L")
+
+
 def extract_palette(image_file: BinaryIO, *, max_colors: int = 6) -> list[str]:
     try:
         if hasattr(image_file, "seek"):
@@ -122,12 +130,15 @@ def render_preview(
     result = base.copy()
     for zone_key, zone in template["zones"].items():
         with Image.open(zone["mask"]) as mask_source:
-            mask = mask_source.convert("L")
+            mask = _mask_to_alpha(mask_source)
         if mask.size != base.size:
             mask = mask.resize(base.size, Image.Resampling.LANCZOS)
 
         zone_color = str(zone_colors.get(zone_key) or "#000000")
-        rgb = Image.new("RGBA", (1, 1), zone_color).getpixel((0, 0))[:3]
+        try:
+            rgb = Image.new("RGBA", (1, 1), zone_color).getpixel((0, 0))[:3]
+        except ValueError:
+            rgb = Image.new("RGBA", (1, 1), "#000000").getpixel((0, 0))[:3]
         overlay = Image.new("RGBA", base.size, (*rgb, 255))
         alpha_mask = mask.point(lambda value: round(value * opacity))
         result = Image.composite(overlay, result, alpha_mask)
