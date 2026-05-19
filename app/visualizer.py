@@ -38,7 +38,7 @@ _DEFAULT_ZONE_MODES = {
     "header": "graphic",
     "body_panels": "color",
     "shelf_lips": "graphic",
-    "base": "color",
+    "base": "texture",
 }
 
 
@@ -107,7 +107,7 @@ def _mask_to_alpha(mask_source: Image.Image) -> Image.Image:
     return rgba_mask.convert("L")
 
 
-def _solid_fill(size: tuple[int, int], color_hex: str) -> Image.Image:
+def build_color_fill(size: tuple[int, int], color_hex: str) -> Image.Image:
     try:
         return Image.new("RGBA", size, color_hex)
     except ValueError:
@@ -261,6 +261,22 @@ def _cover_resize(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return resized.crop((left, top, left + target_w, top + target_h))
 
 
+def _fit_center(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    target_w, target_h = size
+    if target_w <= 0 or target_h <= 0:
+        return Image.new("RGBA", size, (0, 0, 0, 0))
+
+    source_w, source_h = image.size
+    scale = min(target_w / source_w, target_h / source_h)
+    resized = image.resize(
+        (max(1, round(source_w * scale)), max(1, round(source_h * scale))),
+        Image.Resampling.LANCZOS,
+    )
+    result = Image.new("RGBA", size, (0, 0, 0, 0))
+    result.alpha_composite(resized, ((target_w - resized.width) // 2, (target_h - resized.height) // 2))
+    return result
+
+
 def _repeat_strip(strip: Image.Image, size: tuple[int, int]) -> Image.Image:
     target_w, target_h = size
     fitted = _cover_resize(strip, (max(1, round(strip.width * target_h / max(strip.height, 1))), target_h))
@@ -272,27 +288,51 @@ def _repeat_strip(strip: Image.Image, size: tuple[int, int]) -> Image.Image:
     return repeated.crop((0, 0, target_w, target_h))
 
 
-def _graphic_fill(size: tuple[int, int], mask: Image.Image, graphic: Image.Image, zone_key: str) -> Optional[Image.Image]:
+def _place_fill_in_mask_bounds(
+    size: tuple[int, int],
+    mask: Image.Image,
+    artwork: Image.Image,
+    *,
+    fit_mode: str,
+) -> Optional[Image.Image]:
     bbox = _mask_bbox(mask)
     if not bbox:
         return None
 
     left, top, right, bottom = bbox
     fill_size = (right - left, bottom - top)
-    if zone_key in {"shelf_lips", "base"}:
-        fill = _repeat_strip(graphic, fill_size)
+    if fit_mode == "tile":
+        fill = _repeat_strip(artwork, fill_size)
+    elif fit_mode in {"fit", "fit_center"}:
+        fill = _fit_center(artwork, fill_size)
     else:
-        fill = _cover_resize(graphic, fill_size)
+        fill = _cover_resize(artwork, fill_size)
 
-    graphic_fill = Image.new("RGBA", size, (0, 0, 0, 0))
-    graphic_fill.alpha_composite(fill, (left, top))
-    return graphic_fill
+    placed = Image.new("RGBA", size, (0, 0, 0, 0))
+    placed.alpha_composite(fill, (left, top))
+    return placed
 
 
-def _shade_fill_with_base(fill: Image.Image, base: Image.Image, *, strength: float = 0.55) -> Image.Image:
+def build_texture_fill(size: tuple[int, int], mask: Image.Image, texture: Image.Image, *, fit_mode: str) -> Optional[Image.Image]:
+    return _place_fill_in_mask_bounds(size, mask, texture.convert("RGBA"), fit_mode=fit_mode)
+
+
+def build_graphic_fill(size: tuple[int, int], mask: Image.Image, graphic: Image.Image, *, fit_mode: str) -> Optional[Image.Image]:
+    return _place_fill_in_mask_bounds(size, mask, graphic.convert("RGBA"), fit_mode=fit_mode)
+
+
+def _shade_fill_with_base(
+    fill: Image.Image,
+    base: Image.Image,
+    *,
+    strength: float = 0.55,
+    style_opacity: float = 0.82,
+) -> Image.Image:
     fill_rgb = fill.convert("RGB")
+    base_rgb = base.convert("RGB")
     base_luma = base.convert("L")
     strength = max(0.0, min(1.0, strength))
+    style_opacity = max(0.0, min(1.0, style_opacity))
 
     shaded = Image.new("RGB", fill.size)
     shaded.putdata(
@@ -305,7 +345,8 @@ def _shade_fill_with_base(fill: Image.Image, base: Image.Image, *, strength: flo
             for (red, green, blue), luma in zip(fill_rgb.getdata(), base_luma.getdata())
         ]
     )
-    result = shaded.convert("RGBA")
+    blended = Image.blend(base_rgb, shaded, style_opacity)
+    result = blended.convert("RGBA")
     result.putalpha(fill.getchannel("A"))
     return result
 
@@ -363,7 +404,10 @@ def render_preview(
     zone_colors: dict[str, str],
     *,
     reference_image: Optional[BinaryIO] = None,
+    texture_image: Optional[BinaryIO] = None,
+    graphic_image: Optional[BinaryIO] = None,
     zone_modes: Optional[dict[str, str]] = None,
+    zone_config: Optional[dict[str, dict[str, str]]] = None,
     overlay_opacity: float = 0.70,
 ) -> Image.Image:
     template = get_template(template_id)
@@ -371,8 +415,14 @@ def render_preview(
         base = base_source.convert("RGBA")
 
     reference = _open_reference_image(reference_image)
+    texture_source = _open_reference_image(texture_image) or reference
+    graphic_source = _open_reference_image(graphic_image) or reference
     reference_art = extract_reference_art_crop(reference) if reference is not None else None
+    texture_art = extract_reference_art_crop(texture_source) if texture_source is not None else None
+    graphic_art = extract_reference_art_crop(graphic_source) if graphic_source is not None else None
     regions = derive_reference_art_regions(reference_art) if reference_art is not None else {}
+    texture_regions = derive_reference_art_regions(texture_art) if texture_art is not None else {}
+    graphic_regions = derive_reference_art_regions(graphic_art) if graphic_art is not None else {}
     modes = {**_DEFAULT_ZONE_MODES, **(zone_modes or {})}
     result = _white_background(base.size)
     result.alpha_composite(base)
@@ -384,15 +434,39 @@ def render_preview(
         if mask.size != base.size:
             mask = mask.resize(base.size, Image.Resampling.LANCZOS)
 
-        fill = _solid_fill(base.size, str(zone_colors.get(zone_key) or "#000000"))
-        if modes.get(zone_key) == "graphic" and reference_art is not None:
-            graphic_source = {
-                "header": regions.get("header_art"),
-                "shelf_lips": regions.get("shelf_strip"),
-                "base": regions.get("base_strip"),
-                "body_panels": reference_art,
+        config = (zone_config or {}).get(zone_key, {})
+        mode = str(config.get("mode") or modes.get(zone_key) or "color").lower()
+        color = str(config.get("color") or zone_colors.get(zone_key) or "#000000")
+        texture_fit = str(config.get("texture_fit_mode") or config.get("fit_mode") or "fill_crop").lower()
+        graphic_fit = str(config.get("graphic_fit_mode") or config.get("fit_mode") or "fill_crop").lower()
+
+        fill = build_color_fill(base.size, color)
+        if mode == "texture" and texture_art is not None:
+            texture_source_for_zone = {
+                "header": texture_regions.get("header_art"),
+                "shelf_lips": texture_regions.get("shelf_strip"),
+                "base": texture_regions.get("base_strip"),
+                "body_panels": texture_art,
             }.get(zone_key)
-            graphic_fill = _graphic_fill(base.size, mask, graphic_source, zone_key) if graphic_source is not None else None
+            texture_fill = (
+                build_texture_fill(base.size, mask, texture_source_for_zone, fit_mode=texture_fit)
+                if texture_source_for_zone is not None
+                else None
+            )
+            if texture_fill is not None:
+                fill = texture_fill
+        elif mode == "graphic" and graphic_art is not None:
+            graphic_source_for_zone = {
+                "header": graphic_regions.get("header_art") or regions.get("header_art"),
+                "shelf_lips": graphic_regions.get("shelf_strip") or regions.get("shelf_strip"),
+                "base": graphic_regions.get("base_strip") or regions.get("base_strip"),
+                "body_panels": graphic_art,
+            }.get(zone_key)
+            graphic_fill = (
+                build_graphic_fill(base.size, mask, graphic_source_for_zone, fit_mode=graphic_fit)
+                if graphic_source_for_zone is not None
+                else None
+            )
             if graphic_fill is not None:
                 fill = graphic_fill
 

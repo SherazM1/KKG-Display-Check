@@ -808,8 +808,20 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             type=["png", "jpg", "jpeg", "webp"],
             key=f"sidekick_visual_reference_{selected_stem}",
         )
+        texture_image = st.file_uploader(
+            "Upload texture image (optional)",
+            type=["png", "jpg", "jpeg", "webp"],
+            key=f"sidekick_visual_texture_{selected_stem}",
+        )
+        graphic_image = st.file_uploader(
+            "Upload graphic image (optional)",
+            type=["png", "jpg", "jpeg", "webp"],
+            key=f"sidekick_visual_graphic_{selected_stem}",
+        )
         palette = visualizer.extract_palette(uploaded_image, max_colors=6) if uploaded_image else []
         uploaded_image_bytes = uploaded_image.getvalue() if uploaded_image else None
+        texture_image_bytes = texture_image.getvalue() if texture_image else None
+        graphic_image_bytes = graphic_image.getvalue() if graphic_image else None
 
         if palette:
             st.caption("Extracted colors")
@@ -893,32 +905,77 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     with left_col:
         template = visualizer.get_template("sidekick_shelves")
         zone_colors: dict[str, str] = {}
-        zone_modes: dict[str, str] = {}
+        zone_config: dict[str, dict[str, str]] = {}
         default_modes = {
             "header": "Graphic",
             "body_panels": "Color",
             "shelf_lips": "Graphic",
-            "base": "Color",
+            "base": "Texture",
         }
         for zone_key, zone in template["zones"].items():
-            zone_modes[zone_key] = st.selectbox(
+            selected_mode = st.selectbox(
                 f"{zone['label']} Fill",
-                ["Color", "Graphic"],
-                index=0 if default_modes[zone_key] == "Color" else 1,
+                ["Color", "Texture", "Graphic"],
+                index={"Color": 0, "Texture": 1, "Graphic": 2}[default_modes[zone_key]],
                 key=f"sidekick_visual_mode_{selected_stem}_{zone_key}",
-            ).lower()
-            zone_colors[zone_key] = st.color_picker(
-                zone["label"],
-                value=default_colors[zone_key],
-                key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
             )
+            color_value = default_colors[zone_key]
+            texture_fit_mode = "fill_crop"
+            graphic_fit_mode = "fill_crop" if zone_key == "header" else "fit_center"
+
+            if selected_mode == "Color":
+                palette_options = palette or [default_colors[zone_key]]
+                selected_color = st.selectbox(
+                    f"{zone['label']} Palette Color",
+                    palette_options,
+                    index=0,
+                    key=f"sidekick_visual_palette_{selected_stem}_{zone_key}",
+                )
+                color_value = st.color_picker(
+                    zone["label"],
+                    value=selected_color,
+                    key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
+                )
+            elif selected_mode == "Texture":
+                texture_fit_label = st.selectbox(
+                    f"{zone['label']} Texture Placement",
+                    ["Fill", "Fit", "Tile"],
+                    index=0,
+                    key=f"sidekick_visual_texture_fit_{selected_stem}_{zone_key}",
+                )
+                texture_fit_mode = {
+                    "Fill": "fill_crop",
+                    "Fit": "fit",
+                    "Tile": "tile",
+                }[texture_fit_label]
+            else:
+                graphic_fit_label = st.selectbox(
+                    f"{zone['label']} Graphic Placement",
+                    ["Fit Center", "Fill Crop"],
+                    index=1 if zone_key == "header" else 0,
+                    key=f"sidekick_visual_graphic_fit_{selected_stem}_{zone_key}",
+                )
+                graphic_fit_mode = {
+                    "Fit Center": "fit_center",
+                    "Fill Crop": "fill_crop",
+                }[graphic_fit_label]
+
+            zone_colors[zone_key] = color_value
+            zone_config[zone_key] = {
+                "mode": selected_mode.lower(),
+                "color": color_value,
+                "texture_fit_mode": texture_fit_mode,
+                "graphic_fit_mode": graphic_fit_mode,
+            }
 
         if st.button("Render Sales Mockup", key=f"sidekick_visual_render_{selected_stem}"):
             preview = visualizer.render_preview(
                 "sidekick_shelves",
                 zone_colors,
                 reference_image=BytesIO(uploaded_image_bytes) if uploaded_image_bytes else None,
-                zone_modes=zone_modes,
+                texture_image=BytesIO(texture_image_bytes) if texture_image_bytes else None,
+                graphic_image=BytesIO(graphic_image_bytes) if graphic_image_bytes else None,
+                zone_config=zone_config,
             )
             st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(preview)
 
