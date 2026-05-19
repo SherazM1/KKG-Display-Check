@@ -788,7 +788,7 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     st.markdown("### Sales Mockup Preview")
     st.caption(
         "Demo preview: extract colors from a reference image and dress the selected display pieces. "
-        "Graphic fills use the detected artwork area from the uploaded reference image."
+        "Graphic and color fills are clipped to the display part masks while preserving the base display shading."
     )
 
     if not visualizer.template_available("sidekick_shelves"):

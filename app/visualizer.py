@@ -38,7 +38,7 @@ _DEFAULT_ZONE_MODES = {
     "header": "graphic",
     "body_panels": "color",
     "shelf_lips": "graphic",
-    "base": "graphic",
+    "base": "color",
 }
 
 
@@ -99,29 +99,19 @@ def _load_piece_layer(path: str, base_size: tuple[int, int]) -> Image.Image:
     return piece
 
 
-def _piece_alpha(piece: Image.Image) -> Image.Image:
-    rgba_piece = piece.convert("RGBA")
-    alpha = rgba_piece.getchannel("A")
+def _mask_to_alpha(mask_source: Image.Image) -> Image.Image:
+    rgba_mask = mask_source.convert("RGBA")
+    alpha = rgba_mask.getchannel("A")
     if alpha.getextrema()[0] < 255:
         return alpha
-    return rgba_piece.convert("L")
+    return rgba_mask.convert("L")
 
 
-def _tint_piece(piece: Image.Image, color_hex: str, *, strength: float = 0.72) -> Image.Image:
-    rgba_piece = piece.convert("RGBA")
-    alpha = _piece_alpha(rgba_piece)
-    strength = max(0.0, min(1.0, strength))
-
+def _solid_fill(size: tuple[int, int], color_hex: str) -> Image.Image:
     try:
-        color = Image.new("RGB", rgba_piece.size, color_hex)
+        return Image.new("RGBA", size, color_hex)
     except ValueError:
-        color = Image.new("RGB", rgba_piece.size, "#000000")
-
-    original_rgb = rgba_piece.convert("RGB")
-    tinted_rgb = Image.blend(original_rgb, color, strength)
-    tinted_piece = tinted_rgb.convert("RGBA")
-    tinted_piece.putalpha(alpha)
-    return tinted_piece
+        return Image.new("RGBA", size, "#000000")
 
 
 def _open_reference_image(image_file: Optional[BinaryIO]) -> Optional[Image.Image]:
@@ -282,9 +272,8 @@ def _repeat_strip(strip: Image.Image, size: tuple[int, int]) -> Image.Image:
     return repeated.crop((0, 0, target_w, target_h))
 
 
-def _graphic_piece(piece: Image.Image, graphic: Image.Image, zone_key: str) -> Optional[Image.Image]:
-    alpha = _piece_alpha(piece)
-    bbox = _mask_bbox(alpha)
+def _graphic_fill(size: tuple[int, int], mask: Image.Image, graphic: Image.Image, zone_key: str) -> Optional[Image.Image]:
+    bbox = _mask_bbox(mask)
     if not bbox:
         return None
 
@@ -295,11 +284,30 @@ def _graphic_piece(piece: Image.Image, graphic: Image.Image, zone_key: str) -> O
     else:
         fill = _cover_resize(graphic, fill_size)
 
-    graphic = Image.new("RGBA", piece.size, (0, 0, 0, 0))
-    graphic.alpha_composite(fill, (left, top))
-    masked = Image.new("RGBA", piece.size, (0, 0, 0, 0))
-    masked.paste(graphic, mask=alpha)
-    return masked
+    graphic_fill = Image.new("RGBA", size, (0, 0, 0, 0))
+    graphic_fill.alpha_composite(fill, (left, top))
+    return graphic_fill
+
+
+def _shade_fill_with_base(fill: Image.Image, base: Image.Image, *, strength: float = 0.55) -> Image.Image:
+    fill_rgb = fill.convert("RGB")
+    base_luma = base.convert("L")
+    strength = max(0.0, min(1.0, strength))
+
+    shaded = Image.new("RGB", fill.size)
+    shaded.putdata(
+        [
+            (
+                round(red * ((1 - strength) + strength * (luma / 255))),
+                round(green * ((1 - strength) + strength * (luma / 255))),
+                round(blue * ((1 - strength) + strength * (luma / 255))),
+            )
+            for (red, green, blue), luma in zip(fill_rgb.getdata(), base_luma.getdata())
+        ]
+    )
+    result = shaded.convert("RGBA")
+    result.putalpha(fill.getchannel("A"))
+    return result
 
 
 def extract_palette(image_file: BinaryIO, *, max_colors: int = 6) -> list[str]:
@@ -367,14 +375,16 @@ def render_preview(
     regions = derive_reference_art_regions(reference_art) if reference_art is not None else {}
     modes = {**_DEFAULT_ZONE_MODES, **(zone_modes or {})}
     result = _white_background(base.size)
+    result.alpha_composite(base)
+
     for zone_key in _RENDER_ORDER:
         zone = template["zones"][zone_key]
-        piece = _load_piece_layer(zone["mask"], base.size)
-        rendered_piece = _tint_piece(
-            piece,
-            str(zone_colors.get(zone_key) or "#000000"),
-            strength=overlay_opacity,
-        )
+        with Image.open(zone["mask"]) as mask_source:
+            mask = _mask_to_alpha(mask_source)
+        if mask.size != base.size:
+            mask = mask.resize(base.size, Image.Resampling.LANCZOS)
+
+        fill = _solid_fill(base.size, str(zone_colors.get(zone_key) or "#000000"))
         if modes.get(zone_key) == "graphic" and reference_art is not None:
             graphic_source = {
                 "header": regions.get("header_art"),
@@ -382,12 +392,16 @@ def render_preview(
                 "base": regions.get("base_strip"),
                 "body_panels": reference_art,
             }.get(zone_key)
-            graphic_piece = _graphic_piece(piece, graphic_source, zone_key) if graphic_source is not None else None
-            if graphic_piece is not None:
-                rendered_piece = graphic_piece
-        result.alpha_composite(rendered_piece)
+            graphic_fill = _graphic_fill(base.size, mask, graphic_source, zone_key) if graphic_source is not None else None
+            if graphic_fill is not None:
+                fill = graphic_fill
 
-    result.alpha_composite(_extract_line_art(base))
+        shaded_fill = _shade_fill_with_base(fill, base, strength=overlay_opacity)
+        clipped_fill = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        clipped_fill.paste(shaded_fill, mask=mask)
+        result.alpha_composite(clipped_fill)
+
+    result.alpha_composite(_extract_line_art(base, opacity=0.18))
 
     return result
 
