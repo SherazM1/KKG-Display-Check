@@ -787,8 +787,8 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
 
     st.markdown("### Sales Mockup Preview")
     st.caption(
-        "Demo preview: extract colors from a reference image and dress the selected display pieces. "
-        "Graphic and color fills are clipped to the display part masks while preserving the base display shading."
+        "Extract colors from a reference image and dress the selected display pieces. "
+        "Sales mockup uses controlled placement for this Sidekick preview."
     )
 
     if not visualizer.template_available("sidekick_shelves"):
@@ -969,7 +969,7 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             }
 
         if st.button("Render Sales Mockup", key=f"sidekick_visual_render_{selected_stem}"):
-            preview = visualizer.render_preview(
+            preview = visualizer.render_sales_mockup_preview(
                 "sidekick_shelves",
                 zone_colors,
                 reference_image=BytesIO(uploaded_image_bytes) if uploaded_image_bytes else None,
