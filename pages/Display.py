@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import colorsys
 import html
-from io import BytesIO
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import streamlit as st
@@ -31,6 +31,7 @@ st.markdown(
 )
 
 ASSETS_ROOT = "assets/references"
+STATIC_SALES_MOCKUP_PATH = Path("assets/visual_templates/sidekick_shelves/static_sales_mockup.png")
 
 ROW_ORDER = ["pdq", "sidekick", "halfpallet", "quarterpallet"]
 ROW_TITLES = {
@@ -969,15 +970,10 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             }
 
         if st.button("Render Sales Mockup", key=f"sidekick_visual_render_{selected_stem}"):
-            preview = visualizer.render_sales_mockup_preview(
-                "sidekick_shelves",
-                zone_colors,
-                reference_image=BytesIO(uploaded_image_bytes) if uploaded_image_bytes else None,
-                texture_image=BytesIO(texture_image_bytes) if texture_image_bytes else None,
-                graphic_image=BytesIO(graphic_image_bytes) if graphic_image_bytes else None,
-                zone_config=zone_config,
-            )
-            st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(preview)
+            if STATIC_SALES_MOCKUP_PATH.is_file():
+                st.session_state["sidekick_visual_preview_png"] = STATIC_SALES_MOCKUP_PATH.read_bytes()
+            else:
+                st.error("Sales mockup image is not available.")
 
     with right_col:
         preview_png = st.session_state.get("sidekick_visual_preview_png")
