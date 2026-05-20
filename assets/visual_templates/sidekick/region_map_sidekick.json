@@ -1,9 +1,8 @@
 {
   "version": 1,
   "template": "sidekick",
-  "description": "Color-coded region map for Sidekick sales mockup recoloring. The PNG defines pixel ownership by color.",
-  "color_tolerance": 35,
-  "max_assignment_distance": 120,
+  "description": "Hard-label color region map for Sidekick sales mockup recoloring. The PNG defines pixel ownership by exact solid colors.",
+  "color_tolerance": 8,
   "regions": {
     "header": {
       "label": "Header",

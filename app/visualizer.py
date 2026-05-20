@@ -19,7 +19,7 @@ _TEMPLATES = {
     "sidekick_shelves": {
         "template_id": "sidekick_shelves",
         "base_image": str(SIDEKICK_TEMPLATE_DIR / "base.png"),
-        "static_sales_mockup": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_RENDER_BASE_FILENAME),
+        "render_base": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_RENDER_BASE_FILENAME),
         "region_map": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_REGION_MAP_FILENAME),
         "region_map_json": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_REGION_MAP_JSON_FILENAME),
         "zones": {
@@ -76,7 +76,7 @@ def template_available(template_id: str) -> bool:
     if template_id == "sidekick_shelves":
         return all(
             Path(template.get(key, "")).is_file()
-            for key in ("static_sales_mockup", "region_map", "region_map_json")
+            for key in ("render_base", "region_map", "region_map_json")
         )
 
     required_paths = [template["base_image"]]
@@ -543,11 +543,7 @@ def _sidekick_zone_color(zone_colors: dict[str, str], zone_key: str) -> str:
 
 
 def get_sidekick_render_base_path() -> Path:
-    return Path(get_template("sidekick_shelves")["static_sales_mockup"])
-
-
-def get_static_sales_mockup_path() -> Path:
-    return get_sidekick_render_base_path()
+    return Path(get_template("sidekick_shelves")["render_base"])
 
 
 def get_sidekick_region_map_path() -> Path:
@@ -561,10 +557,6 @@ def get_sidekick_region_map_json_path() -> Path:
 def load_sidekick_render_base() -> Image.Image:
     with Image.open(get_sidekick_render_base_path()) as source:
         return source.convert("RGBA")
-
-
-def load_static_sales_mockup() -> Image.Image:
-    return load_sidekick_render_base()
 
 
 def _load_sidekick_region_contract() -> dict:
@@ -586,7 +578,6 @@ def _rgb_from_hex(color_hex: str) -> tuple[int, int, int]:
 def _sidekick_region_masks_from_map(region_map: Image.Image, contract: dict) -> tuple[dict[str, Image.Image], int]:
     regions = contract["regions"]
     tolerance = int(contract.get("color_tolerance", 0))
-    max_distance = float(contract.get("max_assignment_distance", max(tolerance, tolerance * 1.75)))
     region_colors = {
         zone_key: _rgb_from_hex(region["map_color"])
         for zone_key, region in regions.items()
@@ -594,34 +585,31 @@ def _sidekick_region_masks_from_map(region_map: Image.Image, contract: dict) -> 
 
     map_rgb = region_map.convert("RGB")
     mask_data = {zone_key: bytearray(map_rgb.width * map_rgb.height) for zone_key in regions}
-    unassigned_colored_pixels = 0
+    unassigned_non_black_pixels = 0
 
     for idx, pixel in enumerate(map_rgb.getdata()):
-        nearest_zone: str | None = None
-        nearest_distance: float | None = None
+        assigned = False
         for zone_key, target in region_colors.items():
-            distance = _color_distance(pixel, target)
-            if nearest_distance is None or distance < nearest_distance:
-                nearest_zone = zone_key
-                nearest_distance = distance
-        if nearest_zone is not None and nearest_distance is not None and nearest_distance <= max_distance:
-            mask_data[nearest_zone][idx] = 255
-        elif max(pixel) - min(pixel) > 24 and not all(channel > 238 for channel in pixel):
-            unassigned_colored_pixels += 1
+            if all(abs(channel - expected) <= tolerance for channel, expected in zip(pixel, target)):
+                mask_data[zone_key][idx] = 255
+                assigned = True
+                break
+        if not assigned and pixel != (0, 0, 0):
+            unassigned_non_black_pixels += 1
 
     masks: dict[str, Image.Image] = {}
     for zone_key, data in mask_data.items():
         mask = Image.new("L", map_rgb.size, 0)
         mask.putdata(data)
         masks[zone_key] = mask
-    return masks, unassigned_colored_pixels
+    return masks, unassigned_non_black_pixels
 
 
 def _validate_sidekick_region_assets() -> tuple[Image.Image, Image.Image, dict]:
-    static_path = get_static_sales_mockup_path()
+    base_path = get_sidekick_render_base_path()
     map_path = get_sidekick_region_map_path()
     json_path = get_sidekick_region_map_json_path()
-    missing = [str(path) for path in (static_path, map_path, json_path) if not path.is_file()]
+    missing = [str(path) for path in (base_path, map_path, json_path) if not path.is_file()]
     if missing:
         raise FileNotFoundError("Missing Sidekick sales mockup asset(s): " + ", ".join(missing))
 
@@ -650,7 +638,8 @@ def get_sidekick_region_debug_info() -> dict[str, object]:
         base_size = base_source.size
     with Image.open(map_path) as map_source:
         region_map = map_source.convert("RGBA")
-    masks, unassigned_colored_pixels = _sidekick_region_masks_from_map(region_map, contract)
+    unique_colors = region_map.convert("RGB").getcolors(maxcolors=10_000_000) or []
+    masks, unassigned_non_black_pixels = _sidekick_region_masks_from_map(region_map, contract)
     pixel_counts = {
         zone_key: sum(count for value, count in enumerate(mask.histogram()) if value > 0)
         for zone_key, mask in masks.items()
@@ -666,12 +655,10 @@ def get_sidekick_region_debug_info() -> dict[str, object]:
         "render_base_filename": SIDEKICK_RENDER_BASE_FILENAME,
         "render_base_dimensions": base_size,
         "region_map_dimensions": region_map.size,
+        "region_map_unique_color_count": len(unique_colors),
         "color_tolerance": int(contract.get("color_tolerance", 0)),
-        "max_assignment_distance": float(
-            contract.get("max_assignment_distance", max(int(contract.get("color_tolerance", 0)), int(contract.get("color_tolerance", 0)) * 1.75))
-        ),
         "pixel_counts": pixel_counts,
-        "unassigned_colored_pixels": unassigned_colored_pixels,
+        "unassigned_non_black_pixels": unassigned_non_black_pixels,
         "warnings": warnings,
     }
 
