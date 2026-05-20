@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 DEFAULT_PALETTE = ["#6F7F35", "#D8C58A", "#F4E8D0", "#B83A68", "#7A2E2E", "#111827"]
 
 SIDEKICK_TEMPLATE_DIR = Path("assets/visual_templates/sidekick")
-SIDEKICK_RENDER_BASE_FILENAME = "static_sales_mockup.png"
+SIDEKICK_RENDER_BASE_FILENAME = "base.png"
 SIDEKICK_REGION_MAP_FILENAME = "region_map_sidekick.png"
 SIDEKICK_REGION_MAP_JSON_FILENAME = "region_map_sidekick.json"
 
@@ -542,8 +542,12 @@ def _sidekick_zone_color(zone_colors: dict[str, str], zone_key: str) -> str:
         return _SIDEKICK_FALLBACK_COLORS.get(zone_key, "#000000")
 
 
-def get_static_sales_mockup_path() -> Path:
+def get_sidekick_render_base_path() -> Path:
     return Path(get_template("sidekick_shelves")["static_sales_mockup"])
+
+
+def get_static_sales_mockup_path() -> Path:
+    return get_sidekick_render_base_path()
 
 
 def get_sidekick_region_map_path() -> Path:
@@ -554,9 +558,13 @@ def get_sidekick_region_map_json_path() -> Path:
     return Path(get_template("sidekick_shelves")["region_map_json"])
 
 
-def load_static_sales_mockup() -> Image.Image:
-    with Image.open(get_static_sales_mockup_path()) as source:
+def load_sidekick_render_base() -> Image.Image:
+    with Image.open(get_sidekick_render_base_path()) as source:
         return source.convert("RGBA")
+
+
+def load_static_sales_mockup() -> Image.Image:
+    return load_sidekick_render_base()
 
 
 def _load_sidekick_region_contract() -> dict:
@@ -575,28 +583,38 @@ def _rgb_from_hex(color_hex: str) -> tuple[int, int, int]:
     return (int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16))
 
 
-def _color_within_tolerance(
-    pixel: tuple[int, int, int],
-    target: tuple[int, int, int],
-    tolerance: int,
-) -> bool:
-    return all(abs(channel - expected) <= tolerance for channel, expected in zip(pixel, target))
+def _sidekick_region_masks_from_map(region_map: Image.Image, contract: dict) -> tuple[dict[str, Image.Image], int]:
+    regions = contract["regions"]
+    tolerance = int(contract.get("color_tolerance", 0))
+    max_distance = float(contract.get("max_assignment_distance", max(tolerance, tolerance * 1.75)))
+    region_colors = {
+        zone_key: _rgb_from_hex(region["map_color"])
+        for zone_key, region in regions.items()
+    }
 
-
-def _sidekick_region_mask_from_map(
-    region_map: Image.Image,
-    target_color: tuple[int, int, int],
-    tolerance: int,
-) -> Image.Image:
     map_rgb = region_map.convert("RGB")
-    mask = Image.new("L", map_rgb.size, 0)
-    mask.putdata(
-        [
-            255 if _color_within_tolerance(pixel, target_color, tolerance) else 0
-            for pixel in map_rgb.getdata()
-        ]
-    )
-    return mask
+    mask_data = {zone_key: bytearray(map_rgb.width * map_rgb.height) for zone_key in regions}
+    unassigned_colored_pixels = 0
+
+    for idx, pixel in enumerate(map_rgb.getdata()):
+        nearest_zone: str | None = None
+        nearest_distance: float | None = None
+        for zone_key, target in region_colors.items():
+            distance = _color_distance(pixel, target)
+            if nearest_distance is None or distance < nearest_distance:
+                nearest_zone = zone_key
+                nearest_distance = distance
+        if nearest_zone is not None and nearest_distance is not None and nearest_distance <= max_distance:
+            mask_data[nearest_zone][idx] = 255
+        elif max(pixel) - min(pixel) > 24 and not all(channel > 238 for channel in pixel):
+            unassigned_colored_pixels += 1
+
+    masks: dict[str, Image.Image] = {}
+    for zone_key, data in mask_data.items():
+        mask = Image.new("L", map_rgb.size, 0)
+        mask.putdata(data)
+        masks[zone_key] = mask
+    return masks, unassigned_colored_pixels
 
 
 def _validate_sidekick_region_assets() -> tuple[Image.Image, Image.Image, dict]:
@@ -607,7 +625,7 @@ def _validate_sidekick_region_assets() -> tuple[Image.Image, Image.Image, dict]:
     if missing:
         raise FileNotFoundError("Missing Sidekick sales mockup asset(s): " + ", ".join(missing))
 
-    base = load_static_sales_mockup()
+    base = load_sidekick_render_base()
     with Image.open(map_path) as map_source:
         region_map = map_source.convert("RGBA")
     if base.size != region_map.size:
@@ -620,17 +638,19 @@ def _validate_sidekick_region_assets() -> tuple[Image.Image, Image.Image, dict]:
 
 def build_sidekick_static_region_masks() -> dict[str, Image.Image]:
     _, region_map, contract = _validate_sidekick_region_assets()
-    tolerance = int(contract.get("color_tolerance", 0))
-    masks: dict[str, Image.Image] = {}
-    for zone_key, region in contract["regions"].items():
-        target_color = _rgb_from_hex(region["map_color"])
-        masks[zone_key] = _sidekick_region_mask_from_map(region_map, target_color, tolerance)
+    masks, _ = _sidekick_region_masks_from_map(region_map, contract)
     return masks
 
 
 def get_sidekick_region_debug_info() -> dict[str, object]:
-    base, region_map, contract = _validate_sidekick_region_assets()
-    masks = build_sidekick_static_region_masks()
+    base_path = get_sidekick_render_base_path()
+    map_path = get_sidekick_region_map_path()
+    contract = _load_sidekick_region_contract()
+    with Image.open(base_path) as base_source:
+        base_size = base_source.size
+    with Image.open(map_path) as map_source:
+        region_map = map_source.convert("RGBA")
+    masks, unassigned_colored_pixels = _sidekick_region_masks_from_map(region_map, contract)
     pixel_counts = {
         zone_key: sum(count for value, count in enumerate(mask.histogram()) if value > 0)
         for zone_key, mask in masks.items()
@@ -640,11 +660,18 @@ def get_sidekick_region_debug_info() -> dict[str, object]:
         for zone_key, count in pixel_counts.items()
         if count == 0
     ]
+    if base_size != region_map.size:
+        warnings.append(f"Render base and region map dimensions do not match: base={base_size}, map={region_map.size}.")
     return {
-        "static_sales_mockup_dimensions": base.size,
+        "render_base_filename": SIDEKICK_RENDER_BASE_FILENAME,
+        "render_base_dimensions": base_size,
         "region_map_dimensions": region_map.size,
         "color_tolerance": int(contract.get("color_tolerance", 0)),
+        "max_assignment_distance": float(
+            contract.get("max_assignment_distance", max(int(contract.get("color_tolerance", 0)), int(contract.get("color_tolerance", 0)) * 1.75))
+        ),
         "pixel_counts": pixel_counts,
+        "unassigned_colored_pixels": unassigned_colored_pixels,
         "warnings": warnings,
     }
 
@@ -666,13 +693,9 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
             continue
 
         luma = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
-        factor = 0.45 + (luma / 255) * 0.88
+        factor = 0.34 + (luma / 255) * 1.08
         tinted = tuple(max(0, min(255, round(channel * factor))) for channel in target)
-        if luma < 45:
-            mixed = tuple(round((original * 0.82) + (new * 0.18)) for original, new in zip((red, green, blue), tinted))
-        else:
-            mixed = tuple(round((original * 0.10) + (new * 0.90)) for original, new in zip((red, green, blue), tinted))
-        output.append((*mixed, round(alpha * (mask_value / 255))))
+        output.append((*tinted, round(alpha * (mask_value / 255))))
 
     recolored.putdata(output)
     return recolored
@@ -680,15 +703,7 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
 
 def render_static_template_color_mockup(region_colors: dict[str, str]) -> Image.Image:
     base, region_map, contract = _validate_sidekick_region_assets()
-    tolerance = int(contract.get("color_tolerance", 0))
-    masks = {
-        zone_key: _sidekick_region_mask_from_map(
-            region_map,
-            _rgb_from_hex(region["map_color"]),
-            tolerance,
-        )
-        for zone_key, region in contract["regions"].items()
-    }
+    masks, _ = _sidekick_region_masks_from_map(region_map, contract)
     for zone_key, mask in masks.items():
         if not mask.getbbox():
             warnings.warn(f"Sidekick region map detected 0 pixels for region '{zone_key}'.", RuntimeWarning)
@@ -734,14 +749,7 @@ def render_sales_mockup_preview(
             overlay_opacity=overlay_opacity,
         )
 
-    try:
-        return render_static_template_color_mockup(zone_colors)
-    except Exception:
-        static_path = get_static_sales_mockup_path()
-        if static_path.is_file():
-            with Image.open(static_path) as source:
-                return source.convert("RGBA")
-        raise
+    return render_static_template_color_mockup(zone_colors)
 
 
 def render_preview(

@@ -4,7 +4,6 @@ from __future__ import annotations
 import colorsys
 import html
 from io import BytesIO
-from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import streamlit as st
@@ -32,7 +31,6 @@ st.markdown(
 )
 
 ASSETS_ROOT = "assets/references"
-STATIC_SALES_MOCKUP_PATH = Path("assets/visual_templates/sidekick/static_sales_mockup.png")
 
 ROW_ORDER = ["pdq", "sidekick", "halfpallet", "quarterpallet"]
 ROW_TITLES = {
@@ -787,9 +785,14 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     if not is_sidekick_shelves:
         return
 
+    preview_context = f"{selected_stem}:{form.get('footprint') or ''}"
+    if st.session_state.get("sidekick_visual_preview_context") != preview_context:
+        st.session_state.pop("sidekick_visual_preview_png", None)
+        st.session_state["sidekick_visual_preview_context"] = preview_context
+
     st.markdown("### Sales Mockup Preview")
     st.caption(
-        "Extract colors from a reference image and recolor the static Sidekick sales mockup."
+        "Extract colors from a reference image and recolor the Sidekick sales mockup."
     )
 
     if not visualizer.template_available("sidekick_shelves"):
@@ -942,15 +945,11 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
                 )
                 st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(rendered)
             except Exception:
-                if STATIC_SALES_MOCKUP_PATH.is_file():
-                    st.session_state["sidekick_visual_preview_png"] = STATIC_SALES_MOCKUP_PATH.read_bytes()
-                else:
-                    st.error("Sales mockup image is not available.")
+                st.session_state.pop("sidekick_visual_preview_png", None)
+                st.error("Sales mockup could not be rendered from the Sidekick region map assets.")
 
     with right_col:
         preview_png = st.session_state.get("sidekick_visual_preview_png")
-        if not preview_png and STATIC_SALES_MOCKUP_PATH.is_file():
-            preview_png = STATIC_SALES_MOCKUP_PATH.read_bytes()
         if preview_png:
             st.image(preview_png)
             st.download_button(
