@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import colorsys
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Optional
@@ -12,6 +13,7 @@ _TEMPLATES = {
     "sidekick_shelves": {
         "template_id": "sidekick_shelves",
         "base_image": "assets/visual_templates/sidekick_shelves/base.png",
+        "static_sales_mockup": "assets/visual_templates/sidekick_shelves/static_sales_mockup.png",
         "zones": {
             "header": {
                 "label": "Header",
@@ -75,6 +77,9 @@ def template_available(template_id: str) -> bool:
         template = get_template(template_id)
     except ValueError:
         return False
+
+    if template_id == "sidekick_shelves":
+        return Path(template.get("static_sales_mockup", "")).is_file()
 
     required_paths = [template["base_image"]]
     required_paths.extend(zone["mask"] for zone in template["zones"].values())
@@ -550,6 +555,162 @@ def _sidekick_zone_color(zone_colors: dict[str, str], zone_key: str) -> str:
         return _SIDEKICK_FALLBACK_COLORS.get(zone_key, "#000000")
 
 
+def _static_template_mask(
+    base: Image.Image,
+    predicate,
+) -> Image.Image:
+    rgb = base.convert("RGB")
+    mask = Image.new("L", base.size, 0)
+    mask.putdata([255 if predicate(red, green, blue) else 0 for red, green, blue in rgb.getdata()])
+    return mask
+
+
+def _split_mask_by_position(mask: Image.Image, predicate) -> Image.Image:
+    width, height = mask.size
+    source = mask.load()
+    result = Image.new("L", mask.size, 0)
+    output = result.load()
+    for y in range(height):
+        for x in range(width):
+            if source[x, y] and predicate(x / width, y / height):
+                output[x, y] = 255
+    return result
+
+
+def _merge_component_boxes(size: tuple[int, int], boxes: list[tuple[int, int, int, int]]) -> Image.Image:
+    mask = Image.new("L", size, 0)
+    draw = ImageDraw.Draw(mask)
+    for box in boxes:
+        draw.rectangle(box, fill=255)
+    return mask
+
+
+def _subtract_masks(mask: Image.Image, *subtract: Image.Image) -> Image.Image:
+    source = mask.convert("L")
+    subtract_data = [other.convert("L") for other in subtract]
+    result = Image.new("L", source.size, 0)
+    pixels = []
+    for values in zip(source.getdata(), *(other.getdata() for other in subtract_data)):
+        pixels.append(255 if values[0] and not any(value for value in values[1:]) else 0)
+    result.putdata(pixels)
+    return result
+
+
+def _derive_sidekick_static_region_masks(base: Image.Image) -> dict[str, Image.Image]:
+    def _hls(red: int, green: int, blue: int) -> tuple[float, float, float]:
+        hue, lightness, saturation = colorsys.rgb_to_hls(red / 255, green / 255, blue / 255)
+        return hue * 360, lightness, saturation
+
+    pink_mask = _static_template_mask(
+        base,
+        lambda red, green, blue: (
+            (lambda hue, lightness, saturation: (
+                (hue >= 325 or hue <= 15)
+                and saturation >= 0.18
+                and 0.35 <= lightness <= 0.92
+                and not (red > 235 and green > 235 and blue > 235)
+            ))(*_hls(red, green, blue))
+        ),
+    )
+    green_mask = _static_template_mask(
+        base,
+        lambda red, green, blue: (
+            (lambda hue, lightness, saturation: (
+                45 <= hue <= 105
+                and saturation >= 0.08
+                and 0.10 <= lightness <= 0.75
+            ))(*_hls(red, green, blue))
+        ),
+    )
+
+    pink_boxes = _mask_component_boxes(
+        pink_mask,
+        min_area=max(500, round(base.width * base.height * 0.00035)),
+    )
+    header_boxes = [box for box in pink_boxes if box[1] < base.height * 0.22]
+    shelf_boxes = [box for box in pink_boxes if box[1] >= base.height * 0.22]
+
+    header_region = _merge_component_boxes(base.size, header_boxes)
+    shelf_lips_region = _merge_component_boxes(base.size, shelf_boxes)
+    base_region = _split_mask_by_position(
+        green_mask,
+        lambda x, y: y >= 0.885 and 0.25 <= x <= 0.72,
+    )
+    side_panel_region = _split_mask_by_position(
+        green_mask,
+        lambda x, y: x >= 0.60 and 0.05 <= y <= 0.98,
+    )
+    body_panels_region = _subtract_masks(green_mask, side_panel_region, base_region)
+
+    if not header_region.getbbox() or not shelf_lips_region.getbbox() or not body_panels_region.getbbox():
+        raise ValueError("Could not derive required Sidekick static-template regions.")
+
+    return {
+        "body_panels": body_panels_region,
+        "side_panel": side_panel_region,
+        "base": base_region,
+        "header": header_region,
+        "shelf_lips": shelf_lips_region,
+    }
+
+
+def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image, target_color: str) -> Image.Image:
+    try:
+        target = Image.new("RGB", (1, 1), target_color).getpixel((0, 0))
+    except ValueError:
+        target = Image.new("RGB", (1, 1), "#000000").getpixel((0, 0))
+
+    base = base_image.convert("RGBA")
+    mask_l = mask.convert("L")
+    recolored = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    output = []
+
+    for (red, green, blue, alpha), mask_value in zip(base.getdata(), mask_l.getdata()):
+        if not mask_value:
+            output.append((0, 0, 0, 0))
+            continue
+
+        luma = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+        factor = 0.45 + (luma / 255) * 0.88
+        tinted = tuple(max(0, min(255, round(channel * factor))) for channel in target)
+        if luma < 45:
+            mixed = tuple(round((original * 0.82) + (new * 0.18)) for original, new in zip((red, green, blue), tinted))
+        else:
+            mixed = tuple(round((original * 0.10) + (new * 0.90)) for original, new in zip((red, green, blue), tinted))
+        output.append((*mixed, round(alpha * (mask_value / 255))))
+
+    recolored.putdata(output)
+    return recolored
+
+
+def _render_sidekick_static_template_colors(zone_colors: dict[str, str]) -> Image.Image:
+    template = get_template("sidekick_shelves")
+    static_path = template.get("static_sales_mockup")
+    if not static_path:
+        raise ValueError("Sidekick static sales mockup is not configured.")
+
+    with Image.open(static_path) as source:
+        base = source.convert("RGBA")
+
+    masks = _derive_sidekick_static_region_masks(base)
+    result = _white_background(base.size)
+    result.alpha_composite(base)
+
+    for zone_key in ("body_panels", "side_panel", "base", "header", "shelf_lips"):
+        mask = masks.get(zone_key)
+        if mask is None or not mask.getbbox():
+            continue
+        result.alpha_composite(
+            recolor_region_preserve_luminance(
+                base,
+                mask,
+                _sidekick_zone_color(zone_colors, zone_key),
+            )
+        )
+
+    return result
+
+
 def render_sales_mockup_preview(
     template_id: str,
     zone_colors: dict[str, str],
@@ -573,77 +734,14 @@ def render_sales_mockup_preview(
             overlay_opacity=overlay_opacity,
         )
 
-    template = get_template(template_id)
-    with Image.open(template["base_image"]) as base_source:
-        base = base_source.convert("RGBA")
-
-    reference = _open_reference_image(reference_image)
-    texture_source = _open_reference_image(texture_image) or reference
-    graphic_source = _open_reference_image(graphic_image) or reference
-
-    reference_header = _safe_fraction_crop(graphic_source or reference, (0.18, 0.06, 0.84, 0.40))
-    reference_strip = _safe_fraction_crop(graphic_source or reference, (0.05, 0.34, 0.82, 0.58))
-    reference_pattern = _safe_fraction_crop(texture_source or reference, (0.08, 0.58, 0.92, 0.86))
-
-    result = _white_background(base.size)
-    result.alpha_composite(base)
-
-    body_color = _sidekick_zone_color(zone_colors, "body_panels")
-    side_color = _sidekick_zone_color(zone_colors, "side_panel") if "side_panel" in zone_colors else body_color
-    header_color = _sidekick_zone_color(zone_colors, "header")
-    shelf_color = _sidekick_zone_color(zone_colors, "shelf_lips")
-    base_color = _sidekick_zone_color(zone_colors, "base")
-
-    body_mask = _sidekick_mask(template, "body_panels", base.size) or _box_mask(base.size, _scaled_box(base.size, _SIDEKICK_SALES_REGIONS["body_panels"]))
-    side_mask = _polygon_mask(base.size, _scaled_polygon(base.size, _SIDEKICK_SALES_REGIONS["side_panel_poly"]))
-    header_mask = _sidekick_mask(template, "header", base.size) or _box_mask(base.size, _scaled_box(base.size, _SIDEKICK_SALES_REGIONS["header"]))
-    shelf_mask = _sidekick_mask(template, "shelf_lips", base.size)
-    base_mask = _sidekick_mask(template, "base", base.size) or _box_mask(base.size, _scaled_box(base.size, _SIDEKICK_SALES_REGIONS["base"]))
-
-    _composite_clipped(
-        result,
-        base,
-        build_color_fill(base.size, body_color),
-        body_mask,
-        strength=0.46,
-        opacity=max(0.55, min(0.78, overlay_opacity)),
-    )
-    _composite_clipped(
-        result,
-        base,
-        build_color_fill(base.size, side_color),
-        side_mask,
-        strength=0.42,
-        opacity=0.62,
-    )
-
-    if reference_pattern is not None:
-        base_fill = _art_fill_for_box(base.size, base_mask.getbbox() or _scaled_box(base.size, _SIDEKICK_SALES_REGIONS["base"]), reference_pattern)
-    else:
-        base_fill = build_color_fill(base.size, base_color)
-    _composite_clipped(result, base, base_fill, base_mask, strength=0.48, opacity=0.72)
-
-    if reference_header is not None:
-        header_fill = _art_fill_for_box(base.size, header_mask.getbbox() or _scaled_box(base.size, _SIDEKICK_SALES_REGIONS["header"]), reference_header)
-    else:
-        header_fill = build_color_fill(base.size, header_color)
-    _composite_clipped(result, base, header_fill, header_mask, strength=0.35, opacity=0.82)
-
-    if shelf_mask is not None:
-        shelf_fill = Image.new("RGBA", base.size, (0, 0, 0, 0))
-        shelf_boxes = _mask_component_boxes(shelf_mask, min_area=max(500, round(base.width * base.height * 0.00035)))
-        if not shelf_boxes:
-            shelf_boxes = [shelf_mask.getbbox()] if shelf_mask.getbbox() else []
-        for box in shelf_boxes:
-            if reference_strip is not None:
-                component_fill = _art_fill_for_box(base.size, box, reference_strip, fit_mode="fill_crop")
-            else:
-                component_fill = build_color_fill(base.size, shelf_color)
-            shelf_fill.alpha_composite(component_fill)
-        _composite_clipped(result, base, shelf_fill, shelf_mask, strength=0.28, opacity=0.88)
-
-    result.alpha_composite(_extract_line_art(base, opacity=0.20))
-    return result
+    try:
+        return _render_sidekick_static_template_colors(zone_colors)
+    except Exception:
+        static_path = get_template(template_id).get("static_sales_mockup")
+        if static_path and Path(static_path).is_file():
+            with Image.open(static_path) as source:
+                return source.convert("RGBA")
+        raise
 
 
 def render_preview(

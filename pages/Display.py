@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import colorsys
 import html
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -788,16 +789,13 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
 
     st.markdown("### Sales Mockup Preview")
     st.caption(
-        "Extract colors from a reference image and dress the selected display pieces. "
-        "Sales mockup uses controlled placement for this Sidekick preview."
+        "Extract colors from a reference image and recolor the static Sidekick sales mockup."
     )
 
     if not visualizer.template_available("sidekick_shelves"):
         st.warning(
             "Visual preview template files are not available yet. Expected folder: "
-            "`assets/visual_templates/sidekick_shelves/` with "
-            "`base.png`, `mask_header.png`, `mask_body_panels.png`, "
-            "`mask_shelf_lips.png`, and `mask_base.png`."
+            "`assets/visual_templates/sidekick_shelves/` with `static_sales_mockup.png`."
         )
         return
 
@@ -809,20 +807,8 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
             type=["png", "jpg", "jpeg", "webp"],
             key=f"sidekick_visual_reference_{selected_stem}",
         )
-        texture_image = st.file_uploader(
-            "Upload texture image (optional)",
-            type=["png", "jpg", "jpeg", "webp"],
-            key=f"sidekick_visual_texture_{selected_stem}",
-        )
-        graphic_image = st.file_uploader(
-            "Upload graphic image (optional)",
-            type=["png", "jpg", "jpeg", "webp"],
-            key=f"sidekick_visual_graphic_{selected_stem}",
-        )
         palette = visualizer.extract_palette(uploaded_image, max_colors=6) if uploaded_image else []
         uploaded_image_bytes = uploaded_image.getvalue() if uploaded_image else None
-        texture_image_bytes = texture_image.getvalue() if texture_image else None
-        graphic_image_bytes = graphic_image.getvalue() if graphic_image else None
 
         if palette:
             st.caption("Extracted colors")
@@ -841,10 +827,26 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     def _suggest_sidekick_zone_colors(colors: list[str]) -> dict[str, str]:
         fallback = {
             "body_panels": "#6F7F35",
+            "side_panel": "#56612F",
             "header": "#D8C58A",
             "shelf_lips": "#B83A68",
             "base": "#4F5F2E",
         }
+
+        def _darken(color: str, amount: float = 0.16) -> str:
+            try:
+                red = int(color[1:3], 16)
+                green = int(color[3:5], 16)
+                blue = int(color[5:7], 16)
+            except (ValueError, TypeError):
+                return fallback["side_panel"]
+            factor = max(0.0, min(1.0, 1 - amount))
+            return "#{:02X}{:02X}{:02X}".format(
+                round(red * factor),
+                round(green * factor),
+                round(blue * factor),
+            )
+
         parsed: list[tuple[str, float, float, float]] = []
         for color in colors:
             try:
@@ -891,6 +893,7 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
         return {
             "header": header,
             "body_panels": body,
+            "side_panel": _darken(body),
             "shelf_lips": shelf_lips,
             "base": base,
         }
@@ -904,79 +907,49 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
         st.session_state[palette_signature_key] = palette_signature
 
     with left_col:
-        template = visualizer.get_template("sidekick_shelves")
-        zone_colors: dict[str, str] = {}
-        zone_config: dict[str, dict[str, str]] = {}
-        default_modes = {
-            "header": "Graphic",
-            "body_panels": "Color",
-            "shelf_lips": "Graphic",
-            "base": "Texture",
+        zones = {
+            "header": "Header",
+            "body_panels": "Body Panels",
+            "side_panel": "Side Panel",
+            "shelf_lips": "Shelf Lips / Front Strips",
+            "base": "Base",
         }
-        for zone_key, zone in template["zones"].items():
-            selected_mode = st.selectbox(
-                f"{zone['label']} Fill",
-                ["Color", "Texture", "Graphic"],
-                index={"Color": 0, "Texture": 1, "Graphic": 2}[default_modes[zone_key]],
-                key=f"sidekick_visual_mode_{selected_stem}_{zone_key}",
-            )
+        zone_colors: dict[str, str] = {}
+        for zone_key, zone_label in zones.items():
             color_value = default_colors[zone_key]
-            texture_fit_mode = "fill_crop"
-            graphic_fit_mode = "fill_crop" if zone_key == "header" else "fit_center"
-
-            if selected_mode == "Color":
-                palette_options = palette or [default_colors[zone_key]]
-                selected_color = st.selectbox(
-                    f"{zone['label']} Palette Color",
-                    palette_options,
-                    index=0,
-                    key=f"sidekick_visual_palette_{selected_stem}_{zone_key}",
-                )
-                color_value = st.color_picker(
-                    zone["label"],
-                    value=selected_color,
-                    key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
-                )
-            elif selected_mode == "Texture":
-                texture_fit_label = st.selectbox(
-                    f"{zone['label']} Texture Placement",
-                    ["Fill", "Fit", "Tile"],
-                    index=0,
-                    key=f"sidekick_visual_texture_fit_{selected_stem}_{zone_key}",
-                )
-                texture_fit_mode = {
-                    "Fill": "fill_crop",
-                    "Fit": "fit",
-                    "Tile": "tile",
-                }[texture_fit_label]
-            else:
-                graphic_fit_label = st.selectbox(
-                    f"{zone['label']} Graphic Placement",
-                    ["Fit Center", "Fill Crop"],
-                    index=1 if zone_key == "header" else 0,
-                    key=f"sidekick_visual_graphic_fit_{selected_stem}_{zone_key}",
-                )
-                graphic_fit_mode = {
-                    "Fit Center": "fit_center",
-                    "Fill Crop": "fill_crop",
-                }[graphic_fit_label]
+            palette_options = palette or [default_colors[zone_key]]
+            selected_color = st.selectbox(
+                f"{zone_label} Palette Color",
+                palette_options,
+                index=0,
+                key=f"sidekick_visual_palette_{selected_stem}_{zone_key}",
+            )
+            color_value = st.color_picker(
+                zone_label,
+                value=selected_color,
+                key=f"sidekick_visual_zone_{selected_stem}_{zone_key}",
+            )
 
             zone_colors[zone_key] = color_value
-            zone_config[zone_key] = {
-                "mode": selected_mode.lower(),
-                "color": color_value,
-                "texture_fit_mode": texture_fit_mode,
-                "graphic_fit_mode": graphic_fit_mode,
-            }
 
         if st.button("Render Sales Mockup", key=f"sidekick_visual_render_{selected_stem}"):
-            if STATIC_SALES_MOCKUP_PATH.is_file():
-                st.session_state["sidekick_visual_preview_png"] = STATIC_SALES_MOCKUP_PATH.read_bytes()
-            else:
-                st.error("Sales mockup image is not available.")
+            try:
+                rendered = visualizer.render_sales_mockup_preview(
+                    "sidekick_shelves",
+                    zone_colors,
+                    reference_image=BytesIO(uploaded_image_bytes) if uploaded_image_bytes else None,
+                )
+                st.session_state["sidekick_visual_preview_png"] = visualizer.pil_image_to_png_bytes(rendered)
+            except Exception:
+                if STATIC_SALES_MOCKUP_PATH.is_file():
+                    st.session_state["sidekick_visual_preview_png"] = STATIC_SALES_MOCKUP_PATH.read_bytes()
+                else:
+                    st.error("Sales mockup image is not available.")
 
     with right_col:
         preview_png = st.session_state.get("sidekick_visual_preview_png")
+        if not preview_png and STATIC_SALES_MOCKUP_PATH.is_file():
+            preview_png = STATIC_SALES_MOCKUP_PATH.read_bytes()
         if preview_png:
             st.image(preview_png)
             st.download_button(
