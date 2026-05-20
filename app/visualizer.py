@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import colorsys
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Optional
@@ -43,25 +42,52 @@ _DEFAULT_ZONE_MODES = {
     "base": "texture",
 }
 
-_SIDEKICK_SALES_REGIONS = {
-    "header": (0.293, 0.054, 0.684, 0.181),
-    "body_panels": (0.267, 0.168, 0.774, 0.872),
-    "base": (0.247, 0.864, 0.787, 0.980),
-    "side_panel_poly": (
-        (0.650, 0.185),
-        (0.779, 0.236),
-        (0.786, 0.883),
-        (0.674, 0.966),
-        (0.636, 0.330),
-    ),
-}
-
 _SIDEKICK_FALLBACK_COLORS = {
     "header": "#D8C58A",
     "body_panels": "#626B37",
     "side_panel": "#56612F",
     "shelf_lips": "#C27D8E",
     "base": "#5B6433",
+}
+
+SIDEKICK_STATIC_POLYGONS: dict[str, list[list[tuple[int, int]]]] = {
+    "header": [
+        [(321, 99), (669, 78), (669, 238), (322, 251)],
+    ],
+    "shelf_lips": [
+        [(325, 485), (657, 486), (657, 552), (326, 552)],
+        [(326, 776), (656, 779), (657, 858), (327, 843)],
+        [(328, 1056), (655, 1079), (656, 1157), (328, 1126)],
+    ],
+    "body_panels": [
+        [(421, 252), (656, 241), (678, 485), (421, 485)],
+        [(421, 553), (659, 553), (678, 776), (421, 775)],
+        [(422, 844), (659, 858), (677, 1058), (422, 1056)],
+        [(422, 1126), (655, 1157), (666, 1321), (421, 1317)],
+    ],
+    "side_panel": [
+        [
+            (669, 78),
+            (752, 99),
+            (743, 1398),
+            (668, 1445),
+            (668, 1157),
+            (656, 1079),
+            (677, 1058),
+            (657, 858),
+            (678, 776),
+            (657, 552),
+            (679, 485),
+            (669, 238),
+        ],
+        [(657, 486), (680, 488), (678, 552), (657, 552)],
+        [(656, 858), (678, 859), (676, 1079), (656, 1079)],
+    ],
+    "base": [
+        [(330, 1318), (668, 1322), (667, 1393), (331, 1357)],
+        [(668, 1322), (743, 1279), (743, 1398), (668, 1445), (667, 1393)],
+        [(330, 1318), (668, 1322), (743, 1279), (420, 1280)],
+    ],
 }
 
 
@@ -535,17 +561,6 @@ def extract_palette(image_file: BinaryIO, *, max_colors: int = 6) -> list[str]:
         return DEFAULT_PALETTE.copy()
 
 
-def _sidekick_mask(template: dict, zone_key: str, size: tuple[int, int]) -> Optional[Image.Image]:
-    zone = template["zones"].get(zone_key)
-    if not zone:
-        return None
-    try:
-        with Image.open(zone["mask"]) as mask_source:
-            return _sanitized_mask(mask_source, size)
-    except Exception:
-        return None
-
-
 def _sidekick_zone_color(zone_colors: dict[str, str], zone_key: str) -> str:
     color = str(zone_colors.get(zone_key) or _SIDEKICK_FALLBACK_COLORS.get(zone_key) or "#000000")
     try:
@@ -555,102 +570,27 @@ def _sidekick_zone_color(zone_colors: dict[str, str], zone_key: str) -> str:
         return _SIDEKICK_FALLBACK_COLORS.get(zone_key, "#000000")
 
 
-def _static_template_mask(
-    base: Image.Image,
-    predicate,
-) -> Image.Image:
-    rgb = base.convert("RGB")
-    mask = Image.new("L", base.size, 0)
-    mask.putdata([255 if predicate(red, green, blue) else 0 for red, green, blue in rgb.getdata()])
-    return mask
+def get_static_sales_mockup_path() -> Path:
+    return Path(get_template("sidekick_shelves")["static_sales_mockup"])
 
 
-def _split_mask_by_position(mask: Image.Image, predicate) -> Image.Image:
-    width, height = mask.size
-    source = mask.load()
-    result = Image.new("L", mask.size, 0)
-    output = result.load()
-    for y in range(height):
-        for x in range(width):
-            if source[x, y] and predicate(x / width, y / height):
-                output[x, y] = 255
-    return result
+def load_static_sales_mockup() -> Image.Image:
+    with Image.open(get_static_sales_mockup_path()) as source:
+        return source.convert("RGBA")
 
 
-def _merge_component_boxes(size: tuple[int, int], boxes: list[tuple[int, int, int, int]]) -> Image.Image:
+def build_polygon_mask(size: tuple[int, int], polygons: list[list[tuple[int, int]]]) -> Image.Image:
     mask = Image.new("L", size, 0)
     draw = ImageDraw.Draw(mask)
-    for box in boxes:
-        draw.rectangle(box, fill=255)
+    for polygon in polygons:
+        draw.polygon(polygon, fill=255)
     return mask
 
 
-def _subtract_masks(mask: Image.Image, *subtract: Image.Image) -> Image.Image:
-    source = mask.convert("L")
-    subtract_data = [other.convert("L") for other in subtract]
-    result = Image.new("L", source.size, 0)
-    pixels = []
-    for values in zip(source.getdata(), *(other.getdata() for other in subtract_data)):
-        pixels.append(255 if values[0] and not any(value for value in values[1:]) else 0)
-    result.putdata(pixels)
-    return result
-
-
-def _derive_sidekick_static_region_masks(base: Image.Image) -> dict[str, Image.Image]:
-    def _hls(red: int, green: int, blue: int) -> tuple[float, float, float]:
-        hue, lightness, saturation = colorsys.rgb_to_hls(red / 255, green / 255, blue / 255)
-        return hue * 360, lightness, saturation
-
-    pink_mask = _static_template_mask(
-        base,
-        lambda red, green, blue: (
-            (lambda hue, lightness, saturation: (
-                (hue >= 325 or hue <= 15)
-                and saturation >= 0.18
-                and 0.35 <= lightness <= 0.92
-                and not (red > 235 and green > 235 and blue > 235)
-            ))(*_hls(red, green, blue))
-        ),
-    )
-    green_mask = _static_template_mask(
-        base,
-        lambda red, green, blue: (
-            (lambda hue, lightness, saturation: (
-                45 <= hue <= 105
-                and saturation >= 0.08
-                and 0.10 <= lightness <= 0.75
-            ))(*_hls(red, green, blue))
-        ),
-    )
-
-    pink_boxes = _mask_component_boxes(
-        pink_mask,
-        min_area=max(500, round(base.width * base.height * 0.00035)),
-    )
-    header_boxes = [box for box in pink_boxes if box[1] < base.height * 0.22]
-    shelf_boxes = [box for box in pink_boxes if box[1] >= base.height * 0.22]
-
-    header_region = _merge_component_boxes(base.size, header_boxes)
-    shelf_lips_region = _merge_component_boxes(base.size, shelf_boxes)
-    base_region = _split_mask_by_position(
-        green_mask,
-        lambda x, y: y >= 0.885 and 0.25 <= x <= 0.72,
-    )
-    side_panel_region = _split_mask_by_position(
-        green_mask,
-        lambda x, y: x >= 0.60 and 0.05 <= y <= 0.98,
-    )
-    body_panels_region = _subtract_masks(green_mask, side_panel_region, base_region)
-
-    if not header_region.getbbox() or not shelf_lips_region.getbbox() or not body_panels_region.getbbox():
-        raise ValueError("Could not derive required Sidekick static-template regions.")
-
+def build_sidekick_static_region_masks(size: tuple[int, int]) -> dict[str, Image.Image]:
     return {
-        "body_panels": body_panels_region,
-        "side_panel": side_panel_region,
-        "base": base_region,
-        "header": header_region,
-        "shelf_lips": shelf_lips_region,
+        zone_key: build_polygon_mask(size, polygons)
+        for zone_key, polygons in SIDEKICK_STATIC_POLYGONS.items()
     }
 
 
@@ -683,16 +623,9 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
     return recolored
 
 
-def _render_sidekick_static_template_colors(zone_colors: dict[str, str]) -> Image.Image:
-    template = get_template("sidekick_shelves")
-    static_path = template.get("static_sales_mockup")
-    if not static_path:
-        raise ValueError("Sidekick static sales mockup is not configured.")
-
-    with Image.open(static_path) as source:
-        base = source.convert("RGBA")
-
-    masks = _derive_sidekick_static_region_masks(base)
+def render_static_template_color_mockup(region_colors: dict[str, str]) -> Image.Image:
+    base = load_static_sales_mockup()
+    masks = build_sidekick_static_region_masks(base.size)
     result = _white_background(base.size)
     result.alpha_composite(base)
 
@@ -704,7 +637,7 @@ def _render_sidekick_static_template_colors(zone_colors: dict[str, str]) -> Imag
             recolor_region_preserve_luminance(
                 base,
                 mask,
-                _sidekick_zone_color(zone_colors, zone_key),
+                _sidekick_zone_color(region_colors, zone_key),
             )
         )
 
@@ -735,10 +668,10 @@ def render_sales_mockup_preview(
         )
 
     try:
-        return _render_sidekick_static_template_colors(zone_colors)
+        return render_static_template_color_mockup(zone_colors)
     except Exception:
-        static_path = get_template(template_id).get("static_sales_mockup")
-        if static_path and Path(static_path).is_file():
+        static_path = get_static_sales_mockup_path()
+        if static_path.is_file():
             with Image.open(static_path) as source:
                 return source.convert("RGBA")
         raise
