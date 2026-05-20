@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Optional
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 DEFAULT_PALETTE = ["#6F7F35", "#D8C58A", "#F4E8D0", "#B83A68", "#7A2E2E", "#111827"]
 
@@ -671,16 +671,16 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
 
     base = base_image.convert("RGBA")
     mask_l = mask.convert("L")
+    smooth_luma = base.convert("L").filter(ImageFilter.GaussianBlur(radius=2.2))
     recolored = Image.new("RGBA", base.size, (0, 0, 0, 0))
     output = []
 
-    for (red, green, blue, alpha), mask_value in zip(base.getdata(), mask_l.getdata()):
+    for (red, green, blue, alpha), mask_value, luma in zip(base.getdata(), mask_l.getdata(), smooth_luma.getdata()):
         if not mask_value:
             output.append((0, 0, 0, 0))
             continue
 
-        luma = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
-        factor = 0.48 + (luma / 255) * 0.72
+        factor = 0.58 + (luma / 255) * 0.46
         tinted = tuple(max(0, min(255, round(channel * factor))) for channel in target)
         output.append((*tinted, round(alpha * (mask_value / 255))))
 
