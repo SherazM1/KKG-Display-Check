@@ -680,7 +680,7 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
             continue
 
         luma = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
-        factor = 0.34 + (luma / 255) * 1.08
+        factor = 0.48 + (luma / 255) * 0.72
         tinted = tuple(max(0, min(255, round(channel * factor))) for channel in target)
         output.append((*tinted, round(alpha * (mask_value / 255))))
 
