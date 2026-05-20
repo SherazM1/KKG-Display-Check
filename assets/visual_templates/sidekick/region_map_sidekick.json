@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "template": "sidekick",
+  "description": "Color-coded region map for Sidekick sales mockup recoloring. The PNG defines pixel ownership by color.",
+  "color_tolerance": 35,
+  "regions": {
+    "header": {
+      "label": "Header",
+      "map_color": "#ff9900",
+      "description": "Front-facing top header face only."
+    },
+    "shelf_lips": {
+      "label": "Shelf Lips",
+      "map_color": "#ffff00",
+      "description": "Front-facing shelf lip strips only."
+    },
+    "body_panels": {
+      "label": "Body Panels",
+      "map_color": "#00c8d8",
+      "description": "Flat internal back-panel/display fields inside each bay."
+    },
+    "side_panel": {
+      "label": "Side Panel",
+      "map_color": "#a832f2",
+      "description": "Right exterior side shell, right header side face, right base wrap, curved side structure, and left inner structural side walls."
+    },
+    "base": {
+      "label": "Base",
+      "map_color": "#a0145d",
+      "description": "Front-facing bottom plinth/base face only."
+    }
+  }
+}

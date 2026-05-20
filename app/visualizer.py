@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import warnings
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Optional
@@ -8,27 +10,34 @@ from PIL import Image, ImageDraw
 
 DEFAULT_PALETTE = ["#6F7F35", "#D8C58A", "#F4E8D0", "#B83A68", "#7A2E2E", "#111827"]
 
+SIDEKICK_TEMPLATE_DIR = Path("assets/visual_templates/sidekick")
+SIDEKICK_RENDER_BASE_FILENAME = "static_sales_mockup.png"
+SIDEKICK_REGION_MAP_FILENAME = "region_map_sidekick.png"
+SIDEKICK_REGION_MAP_JSON_FILENAME = "region_map_sidekick.json"
+
 _TEMPLATES = {
     "sidekick_shelves": {
         "template_id": "sidekick_shelves",
-        "base_image": "assets/visual_templates/sidekick_shelves/base.png",
-        "static_sales_mockup": "assets/visual_templates/sidekick_shelves/static_sales_mockup.png",
+        "base_image": str(SIDEKICK_TEMPLATE_DIR / "base.png"),
+        "static_sales_mockup": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_RENDER_BASE_FILENAME),
+        "region_map": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_REGION_MAP_FILENAME),
+        "region_map_json": str(SIDEKICK_TEMPLATE_DIR / SIDEKICK_REGION_MAP_JSON_FILENAME),
         "zones": {
             "header": {
                 "label": "Header",
-                "mask": "assets/visual_templates/sidekick_shelves/mask_header.png",
+                "mask": str(SIDEKICK_TEMPLATE_DIR / "mask_header.png"),
             },
             "body_panels": {
                 "label": "Body Panels",
-                "mask": "assets/visual_templates/sidekick_shelves/mask_body_panels.png",
+                "mask": str(SIDEKICK_TEMPLATE_DIR / "mask_body_panels.png"),
             },
             "shelf_lips": {
                 "label": "Shelf Lips / Front Strips",
-                "mask": "assets/visual_templates/sidekick_shelves/mask_shelf_lips.png",
+                "mask": str(SIDEKICK_TEMPLATE_DIR / "mask_shelf_lips.png"),
             },
             "base": {
                 "label": "Base",
-                "mask": "assets/visual_templates/sidekick_shelves/mask_base.png",
+                "mask": str(SIDEKICK_TEMPLATE_DIR / "mask_base.png"),
             },
         },
     }
@@ -50,46 +59,6 @@ _SIDEKICK_FALLBACK_COLORS = {
     "base": "#5B6433",
 }
 
-SIDEKICK_STATIC_POLYGONS: dict[str, list[list[tuple[int, int]]]] = {
-    "header": [
-        [(321, 99), (669, 78), (669, 238), (322, 251)],
-    ],
-    "shelf_lips": [
-        [(325, 485), (657, 486), (657, 552), (326, 552)],
-        [(326, 776), (656, 779), (657, 858), (327, 843)],
-        [(328, 1056), (655, 1079), (656, 1157), (328, 1126)],
-    ],
-    "body_panels": [
-        [(421, 252), (656, 241), (678, 485), (421, 485)],
-        [(421, 553), (659, 553), (678, 776), (421, 775)],
-        [(422, 844), (659, 858), (677, 1058), (422, 1056)],
-        [(422, 1126), (655, 1157), (666, 1321), (421, 1317)],
-    ],
-    "side_panel": [
-        [
-            (669, 78),
-            (752, 99),
-            (743, 1398),
-            (668, 1445),
-            (668, 1157),
-            (656, 1079),
-            (677, 1058),
-            (657, 858),
-            (678, 776),
-            (657, 552),
-            (679, 485),
-            (669, 238),
-        ],
-        [(657, 486), (680, 488), (678, 552), (657, 552)],
-        [(656, 858), (678, 859), (676, 1079), (656, 1079)],
-    ],
-    "base": [
-        [(330, 1318), (668, 1322), (667, 1393), (331, 1357)],
-        [(668, 1322), (743, 1279), (743, 1398), (668, 1445), (667, 1393)],
-        [(330, 1318), (668, 1322), (743, 1279), (420, 1280)],
-    ],
-}
-
 
 def get_template(template_id: str) -> dict:
     try:
@@ -105,7 +74,10 @@ def template_available(template_id: str) -> bool:
         return False
 
     if template_id == "sidekick_shelves":
-        return Path(template.get("static_sales_mockup", "")).is_file()
+        return all(
+            Path(template.get(key, "")).is_file()
+            for key in ("static_sales_mockup", "region_map", "region_map_json")
+        )
 
     required_paths = [template["base_image"]]
     required_paths.extend(zone["mask"] for zone in template["zones"].values())
@@ -574,23 +546,106 @@ def get_static_sales_mockup_path() -> Path:
     return Path(get_template("sidekick_shelves")["static_sales_mockup"])
 
 
+def get_sidekick_region_map_path() -> Path:
+    return Path(get_template("sidekick_shelves")["region_map"])
+
+
+def get_sidekick_region_map_json_path() -> Path:
+    return Path(get_template("sidekick_shelves")["region_map_json"])
+
+
 def load_static_sales_mockup() -> Image.Image:
     with Image.open(get_static_sales_mockup_path()) as source:
         return source.convert("RGBA")
 
 
-def build_polygon_mask(size: tuple[int, int], polygons: list[list[tuple[int, int]]]) -> Image.Image:
-    mask = Image.new("L", size, 0)
-    draw = ImageDraw.Draw(mask)
-    for polygon in polygons:
-        draw.polygon(polygon, fill=255)
+def _load_sidekick_region_contract() -> dict:
+    path = get_sidekick_region_map_json_path()
+    with path.open("r", encoding="utf-8") as file:
+        contract = json.load(file)
+    if not isinstance(contract.get("regions"), dict):
+        raise ValueError("Sidekick region map JSON is missing a regions object.")
+    return contract
+
+
+def _rgb_from_hex(color_hex: str) -> tuple[int, int, int]:
+    color = str(color_hex).strip().lstrip("#")
+    if len(color) != 6:
+        raise ValueError(f"Invalid map color: {color_hex}")
+    return (int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16))
+
+
+def _color_within_tolerance(
+    pixel: tuple[int, int, int],
+    target: tuple[int, int, int],
+    tolerance: int,
+) -> bool:
+    return all(abs(channel - expected) <= tolerance for channel, expected in zip(pixel, target))
+
+
+def _sidekick_region_mask_from_map(
+    region_map: Image.Image,
+    target_color: tuple[int, int, int],
+    tolerance: int,
+) -> Image.Image:
+    map_rgb = region_map.convert("RGB")
+    mask = Image.new("L", map_rgb.size, 0)
+    mask.putdata(
+        [
+            255 if _color_within_tolerance(pixel, target_color, tolerance) else 0
+            for pixel in map_rgb.getdata()
+        ]
+    )
     return mask
 
 
-def build_sidekick_static_region_masks(size: tuple[int, int]) -> dict[str, Image.Image]:
+def _validate_sidekick_region_assets() -> tuple[Image.Image, Image.Image, dict]:
+    static_path = get_static_sales_mockup_path()
+    map_path = get_sidekick_region_map_path()
+    json_path = get_sidekick_region_map_json_path()
+    missing = [str(path) for path in (static_path, map_path, json_path) if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("Missing Sidekick sales mockup asset(s): " + ", ".join(missing))
+
+    base = load_static_sales_mockup()
+    with Image.open(map_path) as map_source:
+        region_map = map_source.convert("RGBA")
+    if base.size != region_map.size:
+        raise ValueError(
+            f"Sidekick render base and region map dimensions do not match: "
+            f"base={base.size}, map={region_map.size}"
+        )
+    return base, region_map, _load_sidekick_region_contract()
+
+
+def build_sidekick_static_region_masks() -> dict[str, Image.Image]:
+    _, region_map, contract = _validate_sidekick_region_assets()
+    tolerance = int(contract.get("color_tolerance", 0))
+    masks: dict[str, Image.Image] = {}
+    for zone_key, region in contract["regions"].items():
+        target_color = _rgb_from_hex(region["map_color"])
+        masks[zone_key] = _sidekick_region_mask_from_map(region_map, target_color, tolerance)
+    return masks
+
+
+def get_sidekick_region_debug_info() -> dict[str, object]:
+    base, region_map, contract = _validate_sidekick_region_assets()
+    masks = build_sidekick_static_region_masks()
+    pixel_counts = {
+        zone_key: sum(count for value, count in enumerate(mask.histogram()) if value > 0)
+        for zone_key, mask in masks.items()
+    }
+    warnings = [
+        f"Region '{zone_key}' detected 0 pixels."
+        for zone_key, count in pixel_counts.items()
+        if count == 0
+    ]
     return {
-        zone_key: build_polygon_mask(size, polygons)
-        for zone_key, polygons in SIDEKICK_STATIC_POLYGONS.items()
+        "static_sales_mockup_dimensions": base.size,
+        "region_map_dimensions": region_map.size,
+        "color_tolerance": int(contract.get("color_tolerance", 0)),
+        "pixel_counts": pixel_counts,
+        "warnings": warnings,
     }
 
 
@@ -624,8 +679,20 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
 
 
 def render_static_template_color_mockup(region_colors: dict[str, str]) -> Image.Image:
-    base = load_static_sales_mockup()
-    masks = build_sidekick_static_region_masks(base.size)
+    base, region_map, contract = _validate_sidekick_region_assets()
+    tolerance = int(contract.get("color_tolerance", 0))
+    masks = {
+        zone_key: _sidekick_region_mask_from_map(
+            region_map,
+            _rgb_from_hex(region["map_color"]),
+            tolerance,
+        )
+        for zone_key, region in contract["regions"].items()
+    }
+    for zone_key, mask in masks.items():
+        if not mask.getbbox():
+            warnings.warn(f"Sidekick region map detected 0 pixels for region '{zone_key}'.", RuntimeWarning)
+
     result = _white_background(base.size)
     result.alpha_composite(base)
 

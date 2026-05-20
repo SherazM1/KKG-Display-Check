@@ -32,7 +32,7 @@ st.markdown(
 )
 
 ASSETS_ROOT = "assets/references"
-STATIC_SALES_MOCKUP_PATH = Path("assets/visual_templates/sidekick_shelves/static_sales_mockup.png")
+STATIC_SALES_MOCKUP_PATH = Path("assets/visual_templates/sidekick/static_sales_mockup.png")
 
 ROW_ORDER = ["pdq", "sidekick", "halfpallet", "quarterpallet"]
 ROW_TITLES = {
@@ -795,7 +795,8 @@ def _render_sidekick_visual_preview(*, form: Dict, selected_stem: str) -> None:
     if not visualizer.template_available("sidekick_shelves"):
         st.warning(
             "Visual preview template files are not available yet. Expected folder: "
-            "`assets/visual_templates/sidekick_shelves/` with `static_sales_mockup.png`."
+            "`assets/visual_templates/sidekick/` with `static_sales_mockup.png`, "
+            "`region_map_sidekick.png`, and `region_map_sidekick.json`."
         )
         return
 
