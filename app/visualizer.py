@@ -671,7 +671,7 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
 
     base = base_image.convert("RGBA")
     mask_l = mask.convert("L")
-    smooth_luma = base.convert("L").filter(ImageFilter.GaussianBlur(radius=2.2))
+    smooth_luma = base.convert("L").filter(ImageFilter.GaussianBlur(radius=5.0))
     recolored = Image.new("RGBA", base.size, (0, 0, 0, 0))
     output = []
 
@@ -680,7 +680,7 @@ def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image
             output.append((0, 0, 0, 0))
             continue
 
-        factor = 0.58 + (luma / 255) * 0.46
+        factor = 0.76 + (luma / 255) * 0.26
         tinted = tuple(max(0, min(255, round(channel * factor))) for channel in target)
         output.append((*tinted, round(alpha * (mask_value / 255))))
 
