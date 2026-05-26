@@ -59,6 +59,14 @@ _SIDEKICK_FALLBACK_COLORS = {
     "base": "#5B6433",
 }
 
+_SIDEKICK_RECOLOR_PARAMS = {
+    "header": {"shade_floor": 0.76, "shade_span": 0.34, "highlight": 0.20, "detail": 0.06},
+    "body_panels": {"shade_floor": 0.68, "shade_span": 0.40, "highlight": 0.14, "detail": 0.045},
+    "side_panel": {"shade_floor": 0.64, "shade_span": 0.42, "highlight": 0.12, "detail": 0.05},
+    "shelf_lips": {"shade_floor": 0.72, "shade_span": 0.36, "highlight": 0.18, "detail": 0.07},
+    "base": {"shade_floor": 0.70, "shade_span": 0.34, "highlight": 0.14, "detail": 0.04},
+}
+
 
 def get_template(template_id: str) -> dict:
     try:
@@ -542,6 +550,12 @@ def _sidekick_zone_color(zone_colors: dict[str, str], zone_key: str) -> str:
         return _SIDEKICK_FALLBACK_COLORS.get(zone_key, "#000000")
 
 
+def _sidekick_render_mask(mask: Image.Image) -> Image.Image:
+    mask_l = mask.convert("L").point(lambda value: 255 if value >= 128 else 0)
+    smoothed = mask_l.filter(ImageFilter.GaussianBlur(radius=0.55))
+    return smoothed.point(lambda value: 0 if value < 10 else 255 if value > 245 else value)
+
+
 def get_sidekick_render_base_path() -> Path:
     return Path(get_template("sidekick_shelves")["render_base"])
 
@@ -663,25 +677,47 @@ def get_sidekick_region_debug_info() -> dict[str, object]:
     }
 
 
-def recolor_region_preserve_luminance(base_image: Image.Image, mask: Image.Image, target_color: str) -> Image.Image:
+def recolor_region_preserve_luminance(
+    base_image: Image.Image,
+    mask: Image.Image,
+    target_color: str,
+    *,
+    zone_key: str = "body_panels",
+) -> Image.Image:
     try:
         target = Image.new("RGB", (1, 1), target_color).getpixel((0, 0))
     except ValueError:
         target = Image.new("RGB", (1, 1), "#000000").getpixel((0, 0))
 
     base = base_image.convert("RGBA")
-    mask_l = mask.convert("L")
-    smooth_luma = base.convert("L").filter(ImageFilter.GaussianBlur(radius=5.0))
+    mask_l = _sidekick_render_mask(mask)
+    base_luma = base.convert("L")
+    form_luma = base_luma.filter(ImageFilter.GaussianBlur(radius=7.0))
+    detail_luma = base_luma.filter(ImageFilter.GaussianBlur(radius=1.15))
+    params = _SIDEKICK_RECOLOR_PARAMS.get(zone_key, _SIDEKICK_RECOLOR_PARAMS["body_panels"])
     recolored = Image.new("RGBA", base.size, (0, 0, 0, 0))
     output = []
 
-    for (red, green, blue, alpha), mask_value, luma in zip(base.getdata(), mask_l.getdata(), smooth_luma.getdata()):
+    for (_, _, _, alpha), mask_value, form, detail in zip(
+        base.getdata(),
+        mask_l.getdata(),
+        form_luma.getdata(),
+        detail_luma.getdata(),
+    ):
         if not mask_value:
             output.append((0, 0, 0, 0))
             continue
 
-        factor = 0.76 + (luma / 255) * 0.26
-        tinted = tuple(max(0, min(255, round(channel * factor))) for channel in target)
+        form_value = form / 255
+        shade = params["shade_floor"] + params["shade_span"] * (form_value ** 1.35)
+        highlight = max(0.0, (form_value - 0.74) / 0.26) * params["highlight"]
+        detail_delta = max(-0.18, min(0.16, (detail - form) / 255)) * params["detail"]
+        lit = []
+        for channel in target:
+            value = channel * shade + detail_delta * 255
+            value = value * (1 - highlight) + 255 * highlight
+            lit.append(max(0, min(255, round(value))))
+        tinted = tuple(lit)
         output.append((*tinted, round(alpha * (mask_value / 255))))
 
     recolored.putdata(output)
@@ -707,6 +743,7 @@ def render_static_template_color_mockup(region_colors: dict[str, str]) -> Image.
                 base,
                 mask,
                 _sidekick_zone_color(region_colors, zone_key),
+                zone_key=zone_key,
             )
         )
 
