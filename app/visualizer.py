@@ -724,6 +724,67 @@ def recolor_region_preserve_luminance(
     return recolored
 
 
+def _sidekick_lowest_deck_mask(masks: dict[str, Image.Image], size: tuple[int, int]) -> Image.Image:
+    body_mask = masks.get("body_panels")
+    base_mask = masks.get("base")
+    if body_mask is None or base_mask is None:
+        return Image.new("L", size, 0)
+
+    body_bbox = body_mask.getbbox()
+    base_bbox = base_mask.getbbox()
+    if not body_bbox or not base_bbox:
+        return Image.new("L", size, 0)
+
+    deck_top = max(body_bbox[1], base_bbox[1] - round(size[1] * 0.065))
+    deck_box = Image.new("L", size, 0)
+    ImageDraw.Draw(deck_box).rectangle((0, deck_top, size[0], base_bbox[1] + 2), fill=255)
+
+    deck_mask = Image.new("L", size, 0)
+    deck_mask.paste(body_mask.convert("L"), mask=deck_box)
+    return _sidekick_render_mask(deck_mask).filter(ImageFilter.GaussianBlur(radius=0.35))
+
+
+def _sidekick_refine_body_panel_layer(
+    layer: Image.Image,
+    base: Image.Image,
+    masks: dict[str, Image.Image],
+) -> Image.Image:
+    deck_mask = _sidekick_lowest_deck_mask(masks, layer.size)
+    deck_bbox = deck_mask.getbbox()
+    if not deck_bbox:
+        return layer
+
+    refined = layer.convert("RGBA")
+    base_rgba = base.convert("RGBA")
+    pixels = list(refined.getdata())
+    base_pixels = list(base_rgba.getdata())
+    deck_pixels = list(deck_mask.getdata())
+    top, bottom = deck_bbox[1], max(deck_bbox[1] + 1, deck_bbox[3])
+
+    output = []
+    for idx, ((red, green, blue, alpha), (base_red, base_green, base_blue, _), mask_value) in enumerate(
+        zip(pixels, base_pixels, deck_pixels)
+    ):
+        if not alpha or not mask_value:
+            output.append((red, green, blue, alpha))
+            continue
+
+        y = idx // refined.width
+        depth = max(0.0, min(1.0, (y - top) / (bottom - top)))
+        base_luma = (0.2126 * base_red + 0.7152 * base_green + 0.0722 * base_blue) / 255
+        mask_mix = mask_value / 255
+        recess = 0.74 + 0.10 * depth + 0.18 * base_luma
+        rear_shadow = 0.08 * (1 - depth)
+        multiplier = 1 - ((1 - (recess - rear_shadow)) * mask_mix)
+        out_red = max(0, min(255, round(red * multiplier)))
+        out_green = max(0, min(255, round(green * multiplier)))
+        out_blue = max(0, min(255, round(blue * multiplier)))
+        output.append((out_red, out_green, out_blue, alpha))
+
+    refined.putdata(output)
+    return refined
+
+
 def render_static_template_color_mockup(region_colors: dict[str, str]) -> Image.Image:
     base, region_map, contract = _validate_sidekick_region_assets()
     masks, _ = _sidekick_region_masks_from_map(region_map, contract)
@@ -738,14 +799,15 @@ def render_static_template_color_mockup(region_colors: dict[str, str]) -> Image.
         mask = masks.get(zone_key)
         if mask is None or not mask.getbbox():
             continue
-        result.alpha_composite(
-            recolor_region_preserve_luminance(
-                base,
-                mask,
-                _sidekick_zone_color(region_colors, zone_key),
-                zone_key=zone_key,
-            )
+        layer = recolor_region_preserve_luminance(
+            base,
+            mask,
+            _sidekick_zone_color(region_colors, zone_key),
+            zone_key=zone_key,
         )
+        if zone_key == "body_panels":
+            layer = _sidekick_refine_body_panel_layer(layer, base, masks)
+        result.alpha_composite(layer)
 
     return result
 
