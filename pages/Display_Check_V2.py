@@ -1,4 +1,4 @@
-"""Default Streamlit entry point for Display Check v2."""
+"""Direct Streamlit page entry for Display Check v2."""
 
 import streamlit as st
 
