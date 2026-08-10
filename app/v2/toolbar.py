@@ -9,8 +9,8 @@ def render_toolbar() -> None:
     """Render static project actions and user placeholder controls."""
     st.markdown('<div class="v2-toolbar">', unsafe_allow_html=True)
     title_col, project_col, action_col, user_col = st.columns(
-        [1.45, 1.55, 1.9, 0.8],
-        gap="medium",
+        [1.3, 1.5, 1.85, 0.7],
+        gap="small",
         vertical_alignment="center",
     )
 

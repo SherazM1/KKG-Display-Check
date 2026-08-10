@@ -9,10 +9,10 @@ from app.v2.models import EstimateResponse, PriceRange, ProjectContext
 from app.v2.services.estimate_service import EstimateService
 
 
-def _show_image(path: Path, caption: str) -> None:
+def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
-        st.image(str(path), caption=caption, use_container_width=True)
+        st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -53,12 +53,14 @@ def render_estimate_panel(project: ProjectContext) -> None:
     with st.container(border=True):
         st.markdown('<div class="v2-card-title">Estimate Assistant</div>', unsafe_allow_html=True)
         st.caption("Uses the shared project details and reference direction for a planning range.")
-        _show_image(REFERENCE_IMAGE, "Reference / Inspiration")
-        st.text_area("Estimate Prompt", key="v2_estimate_prompt", height=110)
+        image_left, image_mid, image_right = st.columns([1, 2, 1])
+        with image_mid:
+            _show_image(REFERENCE_IMAGE, "Reference / Inspiration", width=220)
+        st.text_area("Estimate Prompt", key="v2_estimate_prompt", height=76)
         if st.button("Estimate / Analyze", use_container_width=True):
             st.session_state["v2_estimate_requested"] = True
 
-        st.markdown(f"#### {response.headline}")
+        st.markdown(f'<div class="v2-card-title">{response.headline}</div>', unsafe_allow_html=True)
         unit_col, program_col = st.columns(2, gap="medium")
         with unit_col:
             st.markdown('<p class="v2-result-label">Unit Range</p>', unsafe_allow_html=True)
@@ -73,27 +75,27 @@ def render_estimate_panel(project: ProjectContext) -> None:
                 unsafe_allow_html=True,
             )
 
-        st.markdown("**Estimate Basis**")
-        for assumption in response.assumptions:
-            st.caption(assumption)
-
-        st.markdown("**What We're Accounting For**")
-        _render_list(
-            [
-                "Main corrugated structure",
-                "Four shelves",
-                "Shelf/support structure",
-                "Base and header",
-                "Standard internal reinforcement",
-                "Assembly and packout assumptions",
-            ]
-        )
-
-        st.markdown("**What Could Change the Estimate**")
-        _render_list(response.price_risks)
-
-        st.markdown("**Still Needed**")
-        _render_list(response.missing_information)
+        basis_col, needed_col = st.columns(2, gap="medium")
+        with basis_col:
+            st.markdown("**Estimate Basis**")
+            for assumption in response.assumptions:
+                st.caption(assumption)
+            st.markdown("**Still Needed**")
+            _render_list(response.missing_information)
+        with needed_col:
+            st.markdown("**What We're Accounting For**")
+            _render_list(
+                [
+                    "Main corrugated structure",
+                    "Four shelves",
+                    "Shelf/support structure",
+                    "Base and header",
+                    "Standard internal reinforcement",
+                    "Assembly and packout assumptions",
+                ]
+            )
+            st.markdown("**What Could Change the Estimate**")
+            _render_list(response.price_risks)
 
         confidence_col, review_col = st.columns(2, gap="medium")
         with confidence_col:

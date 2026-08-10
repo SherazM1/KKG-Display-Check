@@ -15,10 +15,10 @@ from app.v2.models import ProjectContext, ProjectDimensions
 from app.v2.state import update_project_context
 
 
-def _show_image(path: Path, caption: str, *, use_container_width: bool = True) -> None:
+def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
-        st.image(str(path), caption=caption, use_container_width=use_container_width)
+        st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -32,7 +32,7 @@ def _display_template_path(display_type: str) -> Path | None:
 
 def render_intake_panel() -> ProjectContext:
     """Render selected display and shared project fields."""
-    st.markdown("### Project Details")
+    st.markdown('<div class="v2-card-title">Project Details</div>', unsafe_allow_html=True)
     display_col, details_col = st.columns([1, 3], gap="large")
 
     with display_col:
@@ -48,11 +48,13 @@ def render_intake_panel() -> ProjectContext:
             if template_path is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                _show_image(template_path, f"Selected display: {display_type}")
+                preview_left, preview_mid, preview_right = st.columns([1, 4, 1])
+                with preview_mid:
+                    _show_image(template_path, f"Selected display: {display_type}", width=170)
 
     with details_col:
         with st.container(border=True):
-            field_col, image_col = st.columns([2, 1], gap="large")
+            field_col, image_col = st.columns([2.45, 1], gap="medium")
 
             with field_col:
                 qty_col, print_col, ship_col = st.columns(3, gap="medium")
@@ -71,18 +73,21 @@ def render_intake_panel() -> ProjectContext:
                         key="v2_shipping_packout",
                     )
 
-                st.markdown("Dimensions")
-                width_col, height_col, depth_col = st.columns(3, gap="medium")
+                width_col, height_col, depth_col, notes_col = st.columns(
+                    [1, 1, 1, 2.2],
+                    gap="medium",
+                )
                 with width_col:
                     width = st.number_input("Width", min_value=1, step=1, key="v2_width")
                 with height_col:
                     height = st.number_input("Height", min_value=1, step=1, key="v2_height")
                 with depth_col:
                     depth = st.number_input("Depth", min_value=1, step=1, key="v2_depth")
-                notes = st.text_area("Notes", key="v2_notes", height=80)
+                with notes_col:
+                    notes = st.text_area("Notes", key="v2_notes", height=52)
 
             with image_col:
-                _show_image(REFERENCE_IMAGE, "Reference / Inspiration")
+                _show_image(REFERENCE_IMAGE, "Reference / Inspiration", width=220)
 
     return update_project_context(
         display_type=display_type,

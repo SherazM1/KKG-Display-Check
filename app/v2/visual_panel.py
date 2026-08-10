@@ -9,10 +9,10 @@ from app.v2.models import ProjectContext, VisualResponse
 from app.v2.services.visual_service import VisualService
 
 
-def _show_image(path: Path, caption: str) -> None:
+def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
-        st.image(str(path), caption=caption, use_container_width=True)
+        st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -42,20 +42,28 @@ def render_visual_panel(project: ProjectContext) -> None:
             if response.base_template is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                _show_image(Path(response.base_template), "Base Template")
+                base_left, base_mid, base_right = st.columns([1, 3, 1])
+                with base_mid:
+                    _show_image(Path(response.base_template), "Base Template", width=170)
         with reference_col:
-            _show_image(Path(response.reference_image or REFERENCE_IMAGE), "Reference / Inspiration")
+            _show_image(
+                Path(response.reference_image or REFERENCE_IMAGE),
+                "Reference / Inspiration",
+                width=230,
+            )
 
-        st.markdown("#### Color Direction")
+        st.markdown('<div class="v2-card-title">Color Direction</div>', unsafe_allow_html=True)
         st.caption(response.graphic_direction)
         _render_palette(response)
 
-        st.text_area("Visual Direction", key="v2_visual_direction", height=110)
+        st.text_area("Visual Direction", key="v2_visual_direction", height=76)
         if st.button("Create Visual", use_container_width=True):
             st.session_state["v2_visual_requested"] = True
 
-        st.markdown("#### Preliminary Mockup")
-        _show_image(STATIC_MOCKUP, "Preliminary mockup &mdash; not final art")
+        st.markdown('<div class="v2-card-title">Preliminary Mockup</div>', unsafe_allow_html=True)
+        mock_left, mock_mid, mock_right = st.columns([1, 4, 1])
+        with mock_mid:
+            _show_image(STATIC_MOCKUP, "Preliminary mockup &mdash; not final art", width=380)
         st.caption(response.summary)
 
         with st.expander("View Visual Notes"):
