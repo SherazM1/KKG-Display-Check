@@ -8,11 +8,18 @@ from app.v2.mock_data import (
     BASE_TEMPLATE,
     DISPLAY_OPTIONS,
     PRINT_TYPE_OPTIONS,
-    REFERENCE_IMAGE,
     SHIPPING_PACKOUT_OPTIONS,
 )
 from app.v2.models import ProjectContext, ProjectDimensions
-from app.v2.state import update_project_context
+from app.v2.state import (
+    clear_reference_image,
+    get_reference_image_bytes,
+    get_reference_image_name,
+    get_reference_uploader_key,
+    set_reference_image,
+    update_project_context,
+)
+from app.v2.uploads import UploadValidationError, sanitize_image_upload
 
 
 def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
@@ -23,11 +30,51 @@ def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
         st.warning(f"Missing asset: `{path}`")
 
 
+def _render_reference_uploader() -> None:
+    """Render the session-only reference image uploader and preview."""
+    uploaded = st.file_uploader(
+        "Reference / Inspiration",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=get_reference_uploader_key(),
+    )
+    if uploaded is not None:
+        try:
+            sanitized = sanitize_image_upload(
+                image_bytes=uploaded.getvalue(),
+                filename=uploaded.name,
+                mime_type=uploaded.type,
+            )
+        except UploadValidationError as exc:
+            st.error(str(exc))
+        else:
+            set_reference_image(
+                image_bytes=sanitized.image_bytes,
+                name=uploaded.name,
+                mime=sanitized.mime_type,
+            )
+
+    image_bytes = get_reference_image_bytes()
+    image_name = get_reference_image_name()
+    if image_bytes is None:
+        st.caption("Optional reference image. PNG, JPG, JPEG, or WEBP up to 10 MB.")
+        return
+
+    st.image(image_bytes, caption=f"Reference / Inspiration: {image_name}", width=220)
+    if st.button("Remove Reference", use_container_width=True):
+        clear_reference_image()
+        st.rerun()
+
+
 def _display_template_path(display_type: str) -> Path | None:
     """Return the available base template path for a display family."""
     if display_type == "Sidekick":
         return BASE_TEMPLATE
     return None
+
+
+def _option_label(option: str) -> str:
+    """Render a quiet placeholder for required select boxes."""
+    return option or "Select..."
 
 
 def render_intake_panel() -> ProjectContext:
@@ -40,9 +87,10 @@ def render_intake_panel() -> ProjectContext:
             st.markdown('<div class="v2-card-title">Select Display Type</div>', unsafe_allow_html=True)
             display_type = st.selectbox(
                 "Display Type",
-                DISPLAY_OPTIONS,
+                ["", *DISPLAY_OPTIONS],
                 key="v2_display_type",
                 label_visibility="collapsed",
+                format_func=_option_label,
             )
             template_path = _display_template_path(display_type)
             if template_path is None:
@@ -63,14 +111,16 @@ def render_intake_panel() -> ProjectContext:
                 with print_col:
                     print_type = st.selectbox(
                         "Print Type",
-                        PRINT_TYPE_OPTIONS,
+                        ["", *PRINT_TYPE_OPTIONS],
                         key="v2_print_type",
+                        format_func=_option_label,
                     )
                 with ship_col:
                     shipping_packout = st.selectbox(
                         "Shipping / Packout",
-                        SHIPPING_PACKOUT_OPTIONS,
+                        ["", *SHIPPING_PACKOUT_OPTIONS],
                         key="v2_shipping_packout",
+                        format_func=_option_label,
                     )
 
                 width_col, height_col, depth_col, notes_col = st.columns(
@@ -87,7 +137,7 @@ def render_intake_panel() -> ProjectContext:
                     notes = st.text_area("Notes", key="v2_notes", height=52)
 
             with image_col:
-                _show_image(REFERENCE_IMAGE, "Reference / Inspiration", width=220)
+                _render_reference_uploader()
 
     return update_project_context(
         display_type=display_type,
@@ -99,6 +149,7 @@ def render_intake_panel() -> ProjectContext:
             height=float(height),
             depth=float(depth),
         ),
-        reference_image=str(REFERENCE_IMAGE),
+        reference_image="session" if get_reference_image_bytes() else None,
+        reference_image_name=get_reference_image_name(),
         notes=notes,
     )

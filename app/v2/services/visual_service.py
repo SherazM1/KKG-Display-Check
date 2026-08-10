@@ -1,6 +1,6 @@
 """Mocked visual service for Display Check v2."""
 
-from app.v2.mock_data import BASE_TEMPLATE, PALETTE_SWATCHES, REFERENCE_IMAGE
+from app.v2.mock_data import BASE_TEMPLATE, PALETTE_SWATCHES
 from app.v2.models import ProjectContext, VisualResponse
 
 
@@ -11,7 +11,6 @@ class VisualService:
         """Build a mocked visual response using shared project fields."""
         is_sidekick = project.display_type == "Sidekick"
         base_template = str(BASE_TEMPLATE) if is_sidekick else None
-        reference_image = project.reference_image or str(REFERENCE_IMAGE)
         palette = [swatch["hex"] for swatch in PALETTE_SWATCHES]
 
         if is_sidekick:
@@ -34,7 +33,7 @@ class VisualService:
             summary=summary,
             display_type=project.display_type,
             base_template=base_template,
-            reference_image=reference_image,
+            reference_image=project.reference_image,
             palette=palette,
             graphic_direction=(
                 "Apply the reference artwork's green, pink, and gold palette "

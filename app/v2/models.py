@@ -25,7 +25,18 @@ class ProjectContext:
         default_factory=lambda: ProjectDimensions(width=20, height=48, depth=12)
     )
     reference_image: str | None = None
+    reference_image_name: str | None = None
     notes: str = ""
+
+
+def is_project_ready(project: ProjectContext) -> bool:
+    """Return whether required intake fields are valid."""
+    return (
+        bool(project.display_type.strip())
+        and project.quantity >= 1
+        and bool(project.print_type.strip())
+        and bool(project.shipping_packout.strip())
+    )
 
 
 @dataclass

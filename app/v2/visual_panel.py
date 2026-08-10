@@ -29,13 +29,21 @@ def _render_palette(response: VisualResponse) -> None:
             st.caption(swatch["label"])
 
 
-def render_visual_panel(project: ProjectContext) -> None:
+def render_visual_panel(
+    project: ProjectContext,
+    *,
+    project_ready: bool,
+    reference_image_bytes: bytes | None,
+    reference_image_name: str | None,
+) -> None:
     """Render the mocked visual assistant response."""
     service = VisualService()
     response = service.prepare(project)
 
     with st.container(border=True):
         st.markdown('<div class="v2-card-title">Visual Assistant</div>', unsafe_allow_html=True)
+        if not project_ready:
+            st.info("Complete the required project details above to access the assistants.")
 
         base_col, reference_col = st.columns(2, gap="medium")
         with base_col:
@@ -46,24 +54,37 @@ def render_visual_panel(project: ProjectContext) -> None:
                 with base_mid:
                     _show_image(Path(response.base_template), "Base Template", width=170)
         with reference_col:
-            _show_image(
-                Path(response.reference_image or REFERENCE_IMAGE),
-                "Reference / Inspiration",
-                width=230,
-            )
+            if reference_image_bytes:
+                st.image(
+                    reference_image_bytes,
+                    caption=f"Reference / Inspiration: {reference_image_name}",
+                    width=230,
+                )
+            else:
+                st.caption("Add a reference image for stronger visual direction.")
 
         st.markdown('<div class="v2-card-title">Color Direction</div>', unsafe_allow_html=True)
         st.caption(response.graphic_direction)
         _render_palette(response)
 
-        st.text_area("Visual Direction", key="v2_visual_direction", height=76)
-        if st.button("Create Visual", use_container_width=True):
+        st.text_area(
+            "Visual Direction",
+            key="v2_visual_direction",
+            height=76,
+            disabled=not project_ready,
+        )
+        if st.button("Create Visual", use_container_width=True, disabled=not project_ready):
             st.session_state["v2_visual_requested"] = True
 
         st.markdown('<div class="v2-card-title">Preliminary Mockup</div>', unsafe_allow_html=True)
         mock_left, mock_mid, mock_right = st.columns([1, 4, 1])
         with mock_mid:
-            _show_image(STATIC_MOCKUP, "Preliminary mockup &mdash; not final art", width=380)
+            caption = (
+                "Preliminary mockup &mdash; not final art"
+                if reference_image_bytes
+                else "Sample mock preliminary concept"
+            )
+            _show_image(STATIC_MOCKUP, caption, width=380)
         st.caption(response.summary)
 
         with st.expander("View Visual Notes"):

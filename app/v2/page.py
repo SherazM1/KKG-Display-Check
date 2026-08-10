@@ -5,7 +5,13 @@ import streamlit as st
 from app.v2.estimate_panel import render_estimate_panel
 from app.v2.intake_panel import render_intake_panel
 from app.v2.navigation import render_navigation
-from app.v2.state import get_project_context, initialize_v2_state
+from app.v2.models import is_project_ready
+from app.v2.state import (
+    get_project_context,
+    get_reference_image_bytes,
+    get_reference_image_name,
+    initialize_v2_state,
+)
 from app.v2.toolbar import render_toolbar
 from app.v2.visual_panel import render_visual_panel
 
@@ -91,11 +97,24 @@ def render_page() -> None:
     render_toolbar()
     render_intake_panel()
     project = get_project_context()
+    project_ready = is_project_ready(project)
+    reference_image_bytes = get_reference_image_bytes()
+    reference_image_name = get_reference_image_name()
 
     left_col, right_col = st.columns(2, gap="large")
     with left_col:
-        render_estimate_panel(project)
+        render_estimate_panel(
+            project,
+            project_ready=project_ready,
+            reference_image_bytes=reference_image_bytes,
+            reference_image_name=reference_image_name,
+        )
     with right_col:
-        render_visual_panel(project)
+        render_visual_panel(
+            project,
+            project_ready=project_ready,
+            reference_image_bytes=reference_image_bytes,
+            reference_image_name=reference_image_name,
+        )
 
     render_navigation()

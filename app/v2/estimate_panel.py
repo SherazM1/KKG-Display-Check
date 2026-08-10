@@ -4,7 +4,6 @@ from pathlib import Path
 
 import streamlit as st
 
-from app.v2.mock_data import REFERENCE_IMAGE
 from app.v2.models import EstimateResponse, PriceRange, ProjectContext
 from app.v2.services.estimate_service import EstimateService
 
@@ -45,20 +44,47 @@ def _render_details(response: EstimateResponse) -> None:
         _render_list(details.technical_notes)
 
 
-def render_estimate_panel(project: ProjectContext) -> None:
+def render_estimate_panel(
+    project: ProjectContext,
+    *,
+    project_ready: bool,
+    reference_image_bytes: bytes | None,
+    reference_image_name: str | None,
+) -> None:
     """Render the mocked estimate assistant response."""
-    service = EstimateService()
-    response = service.analyze(project)
-
     with st.container(border=True):
         st.markdown('<div class="v2-card-title">Estimate Assistant</div>', unsafe_allow_html=True)
         st.caption("Uses the shared project details and reference direction for a planning range.")
-        image_left, image_mid, image_right = st.columns([1, 2, 1])
-        with image_mid:
-            _show_image(REFERENCE_IMAGE, "Reference / Inspiration", width=220)
-        st.text_area("Estimate Prompt", key="v2_estimate_prompt", height=76)
-        if st.button("Estimate / Analyze", use_container_width=True):
+        if not project_ready:
+            st.info("Complete the required project details above to access the assistants.")
+
+        if reference_image_bytes:
+            image_left, image_mid, image_right = st.columns([1, 2, 1])
+            with image_mid:
+                st.image(
+                    reference_image_bytes,
+                    caption=f"Reference / Inspiration: {reference_image_name}",
+                    width=220,
+                )
+        else:
+            st.caption(
+                "No reference image provided. The estimate will use project details "
+                "and written direction only."
+            )
+
+        st.text_area(
+            "Estimate Prompt",
+            key="v2_estimate_prompt",
+            height=76,
+            disabled=not project_ready,
+        )
+        if st.button("Estimate / Analyze", use_container_width=True, disabled=not project_ready):
             st.session_state["v2_estimate_requested"] = True
+
+        if not project_ready:
+            return
+
+        response = EstimateService().analyze(project)
 
         st.markdown(f'<div class="v2-card-title">{response.headline}</div>', unsafe_allow_html=True)
         unit_col, program_col = st.columns(2, gap="medium")
