@@ -5,7 +5,7 @@ import streamlit as st
 from app.v2.estimate_panel import render_estimate_panel
 from app.v2.intake_panel import render_intake_panel
 from app.v2.navigation import render_navigation
-from app.v2.state import init_state
+from app.v2.state import get_project_context, initialize_v2_state
 from app.v2.toolbar import render_toolbar
 from app.v2.visual_panel import render_visual_panel
 
@@ -73,15 +73,16 @@ def _inject_styles() -> None:
 
 def render_page() -> None:
     """Render the complete visual-only Display Check v2 experience."""
-    init_state()
+    initialize_v2_state()
     _inject_styles()
     render_toolbar()
     render_intake_panel()
+    project = get_project_context()
 
     left_col, right_col = st.columns(2, gap="large")
     with left_col:
-        render_estimate_panel()
+        render_estimate_panel(project)
     with right_col:
-        render_visual_panel()
+        render_visual_panel(project)
 
     render_navigation()

@@ -2,6 +2,8 @@
 
 import streamlit as st
 
+from app.v2.state import update_project_context
+
 
 def render_toolbar() -> None:
     """Render static project actions and user placeholder controls."""
@@ -17,7 +19,8 @@ def render_toolbar() -> None:
         st.markdown('<div class="v2-muted">Visual planning workspace</div>', unsafe_allow_html=True)
 
     with project_col:
-        st.text_input("Project Name", key="v2_project_name")
+        project_name = st.text_input("Project Name", key="v2_project_name")
+        update_project_context(project_name=project_name)
 
     with action_col:
         new_col, save_col, export_col = st.columns(3, gap="small")
