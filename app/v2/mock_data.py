@@ -15,6 +15,17 @@ PALETTE_SWATCHES = [
 ]
 
 ASSET_ROOT = Path("assets") / "visual_templates" / "sidekick"
-BASE_TEMPLATE = ASSET_ROOT / "base.png"
+
+
+def _preferred_asset(preferred_name: str, fallback_name: str) -> Path:
+    """Return a preferred asset when present, otherwise its stable fallback."""
+    preferred = ASSET_ROOT / preferred_name
+    if preferred.exists():
+        return preferred
+    return ASSET_ROOT / fallback_name
+
+
+BASE_TEMPLATE = _preferred_asset("base_transparent.png", "base.png")
 REFERENCE_IMAGE = ASSET_ROOT / "referenceimagesample_dc2.webp"
-STATIC_MOCKUP = ASSET_ROOT / "staticreference.png"
+REFERENCE_IMAGE_NAME = "Demo reference image"
+STATIC_MOCKUP = _preferred_asset("staticreference_transparent.png", "staticreference.png")

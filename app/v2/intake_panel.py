@@ -8,6 +8,8 @@ from app.v2.mock_data import (
     BASE_TEMPLATE,
     DISPLAY_OPTIONS,
     PRINT_TYPE_OPTIONS,
+    REFERENCE_IMAGE,
+    REFERENCE_IMAGE_NAME,
     SHIPPING_PACKOUT_OPTIONS,
 )
 from app.v2.models import ProjectContext, ProjectDimensions
@@ -25,7 +27,8 @@ from app.v2.uploads import UploadValidationError, sanitize_image_upload
 def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
-        st.image(str(path), caption=caption, width=width)
+        with st.container(border=True):
+            st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -56,10 +59,23 @@ def _render_reference_uploader() -> None:
     image_bytes = get_reference_image_bytes()
     image_name = get_reference_image_name()
     if image_bytes is None:
-        st.caption("Optional reference image. PNG, JPG, JPEG, or WEBP up to 10 MB.")
+        if REFERENCE_IMAGE.exists():
+            with st.container(border=True):
+                st.image(
+                    str(REFERENCE_IMAGE),
+                    caption=f"Demo reference: {REFERENCE_IMAGE_NAME}",
+                    width=220,
+                )
+        else:
+            st.markdown(
+                '<div class="v2-placeholder-card">Optional reference image<br>'
+                "PNG, JPG, JPEG, or WEBP up to 10 MB.</div>",
+                unsafe_allow_html=True,
+            )
         return
 
-    st.image(image_bytes, caption=f"Reference / Inspiration: {image_name}", width=220)
+    with st.container(border=True):
+        st.image(image_bytes, caption=f"Reference / Inspiration: {image_name}", width=220)
     if st.button("Remove Reference", use_container_width=True):
         clear_reference_image()
         st.rerun()
@@ -79,12 +95,21 @@ def _option_label(option: str) -> str:
 
 def render_intake_panel() -> ProjectContext:
     """Render selected display and shared project fields."""
-    st.markdown('<div class="v2-card-title">Project Details</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="v2-section-kicker">Project setup</div>'
+        '<div class="v2-card-title">Project Details</div>',
+        unsafe_allow_html=True,
+    )
     display_col, details_col = st.columns([1, 3], gap="large")
 
     with display_col:
         with st.container(border=True):
-            st.markdown('<div class="v2-card-title">Select Display Type</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="v2-panel-heading">'
+                '<div class="v2-card-title">Display Type</div>'
+                '<span class="v2-chip">Sidekick flow</span></div>',
+                unsafe_allow_html=True,
+            )
             display_type = st.selectbox(
                 "Display Type",
                 ["", *DISPLAY_OPTIONS],
@@ -105,6 +130,7 @@ def render_intake_panel() -> ProjectContext:
             field_col, image_col = st.columns([2.45, 1], gap="medium")
 
             with field_col:
+                st.markdown('<div class="v2-panel-subtitle">Core specs</div>', unsafe_allow_html=True)
                 qty_col, print_col, ship_col = st.columns(3, gap="medium")
                 with qty_col:
                     quantity = st.number_input("Quantity", min_value=1, step=25, key="v2_quantity")
@@ -137,6 +163,10 @@ def render_intake_panel() -> ProjectContext:
                     notes = st.text_area("Notes", key="v2_notes", height=52)
 
             with image_col:
+                st.markdown(
+                    '<div class="v2-panel-subtitle">Shared reference</div>',
+                    unsafe_allow_html=True,
+                )
                 _render_reference_uploader()
 
     return update_project_context(

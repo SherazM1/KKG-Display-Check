@@ -4,6 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from app.v2.mock_data import REFERENCE_IMAGE, REFERENCE_IMAGE_NAME
 from app.v2.models import EstimateResponse, PriceRange, ProjectContext
 from app.v2.services.estimate_service import EstimateService
 
@@ -11,7 +12,8 @@ from app.v2.services.estimate_service import EstimateService
 def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
-        st.image(str(path), caption=caption, width=width)
+        with st.container(border=True):
+            st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -53,23 +55,34 @@ def render_estimate_panel(
 ) -> None:
     """Render the mocked estimate assistant response."""
     with st.container(border=True):
-        st.markdown('<div class="v2-card-title">Estimate Assistant</div>', unsafe_allow_html=True)
-        st.caption("Uses the shared project details and reference direction for a planning range.")
+        st.markdown(
+            '<div class="v2-panel-heading">'
+            '<div><div class="v2-card-title">Estimate Assistant</div>'
+            '<div class="v2-panel-subtitle">Shared project details translated into a planning range.</div></div>'
+            '<span class="v2-chip">Prototype</span></div>',
+            unsafe_allow_html=True,
+        )
         if not project_ready:
             st.info("Complete the required project details above to access the assistants.")
 
         if reference_image_bytes:
             image_left, image_mid, image_right = st.columns([1, 2, 1])
             with image_mid:
-                st.image(
-                    reference_image_bytes,
-                    caption=f"Reference / Inspiration: {reference_image_name}",
-                    width=220,
-                )
+                with st.container(border=True):
+                    st.image(
+                        reference_image_bytes,
+                        caption=f"Reference / Inspiration: {reference_image_name}",
+                        width=220,
+                    )
+        elif REFERENCE_IMAGE.exists():
+            image_left, image_mid, image_right = st.columns([1, 2, 1])
+            with image_mid:
+                _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}", width=220)
         else:
-            st.caption(
-                "No reference image provided. The estimate will use project details "
-                "and written direction only."
+            st.markdown(
+                '<div class="v2-placeholder-card">No reference image provided.<br>'
+                "The estimate will use project details and written direction only.</div>",
+                unsafe_allow_html=True,
             )
 
         st.text_area(
@@ -86,53 +99,63 @@ def render_estimate_panel(
 
         response = EstimateService().analyze(project)
 
-        st.markdown(f'<div class="v2-card-title">{response.headline}</div>', unsafe_allow_html=True)
-        unit_col, program_col = st.columns(2, gap="medium")
-        with unit_col:
-            st.markdown('<p class="v2-result-label">Unit Range</p>', unsafe_allow_html=True)
+        with st.container(border=True):
             st.markdown(
-                f'<p class="v2-result-value">{_format_price_range(response.unit_price_range, per_unit=True)}</p>',
+                f'<div class="v2-card-title">{response.headline}</div>',
                 unsafe_allow_html=True,
             )
-        with program_col:
-            st.markdown('<p class="v2-result-label">Program Range</p>', unsafe_allow_html=True)
-            st.markdown(
-                f'<p class="v2-result-value">{_format_price_range(response.program_price_range)}</p>',
-                unsafe_allow_html=True,
-            )
+            unit_col, program_col, review_col = st.columns([1, 1.25, 0.9], gap="medium")
+            with unit_col:
+                st.markdown('<p class="v2-result-label">Unit Range</p>', unsafe_allow_html=True)
+                st.markdown(
+                    '<p class="v2-estimate-value">'
+                    f"{_format_price_range(response.unit_price_range, per_unit=True)}</p>",
+                    unsafe_allow_html=True,
+                )
+            with program_col:
+                st.markdown('<p class="v2-result-label">Program Range</p>', unsafe_allow_html=True)
+                st.markdown(
+                    '<p class="v2-estimate-value">'
+                    f"{_format_price_range(response.program_price_range)}</p>",
+                    unsafe_allow_html=True,
+                )
+            with review_col:
+                st.markdown('<p class="v2-result-label">Confidence</p>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<span class="v2-badge v2-badge-green">{response.confidence}</span>',
+                    unsafe_allow_html=True,
+                )
+                review_text = "Review recommended" if response.review_required else "Review optional"
+                st.markdown(f'<span class="v2-badge">{review_text}</span>', unsafe_allow_html=True)
 
         basis_col, needed_col = st.columns(2, gap="medium")
         with basis_col:
-            st.markdown("**Estimate Basis**")
-            for assumption in response.assumptions:
-                st.caption(assumption)
-            st.markdown("**Still Needed**")
-            _render_list(response.missing_information)
+            with st.container(border=True):
+                st.markdown("**Estimate Basis**")
+                for assumption in response.assumptions:
+                    st.caption(assumption)
+            with st.container(border=True):
+                st.markdown("**Still Needed**")
+                _render_list(response.missing_information)
         with needed_col:
-            st.markdown("**What We're Accounting For**")
-            _render_list(
-                [
-                    "Main corrugated structure",
-                    "Four shelves",
-                    "Shelf/support structure",
-                    "Base and header",
-                    "Standard internal reinforcement",
-                    "Assembly and packout assumptions",
-                ]
-            )
-            st.markdown("**What Could Change the Estimate**")
-            _render_list(response.price_risks)
+            with st.container(border=True):
+                st.markdown("**What We're Accounting For**")
+                _render_list(
+                    [
+                        "Main corrugated structure",
+                        "Four shelves",
+                        "Shelf/support structure",
+                        "Base and header",
+                        "Standard internal reinforcement",
+                        "Assembly and packout assumptions",
+                    ]
+                )
+            with st.container(border=True):
+                st.markdown("**What Could Change the Estimate**")
+                _render_list(response.price_risks)
 
-        confidence_col, review_col = st.columns(2, gap="medium")
-        with confidence_col:
-            st.markdown('<p class="v2-result-label">Confidence</p>', unsafe_allow_html=True)
-            st.markdown(f'<p class="v2-result-value">{response.confidence}</p>', unsafe_allow_html=True)
-        with review_col:
-            st.markdown('<p class="v2-result-label">Estimator Review</p>', unsafe_allow_html=True)
-            review_text = "Recommended" if response.review_required else "Optional"
-            st.markdown(f'<p class="v2-result-value">{review_text}</p>', unsafe_allow_html=True)
-            if response.review_reason:
-                st.caption(response.review_reason)
+        if response.review_reason:
+            st.caption(response.review_reason)
 
         st.caption(response.disclaimer)
         _render_details(response)

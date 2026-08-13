@@ -15,7 +15,12 @@ def render_toolbar() -> None:
     )
 
     with title_col:
-        st.markdown('<div class="v2-title">Display Check 2.0</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="v2-title-row">'
+            '<div class="v2-title">Display Check 2.0</div>'
+            '<span class="v2-chip">V2</span></div>',
+            unsafe_allow_html=True,
+        )
         st.markdown('<div class="v2-muted">Visual planning workspace</div>', unsafe_allow_html=True)
 
     with project_col:

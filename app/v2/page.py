@@ -22,29 +22,77 @@ def _inject_styles() -> None:
         """
         <style>
           :root {
-            --v2-border: #e5e7eb;
-            --v2-muted: #667085;
+            --v2-accent: #22675d;
+            --v2-accent-soft: #e8f2ef;
+            --v2-border: #d8dee6;
+            --v2-card: #ffffff;
+            --v2-muted: #5f6b7a;
             --v2-ink: #101828;
+            --v2-soft: #f5f7f9;
+          }
+          .block-container {
+            max-width: 1380px;
+            padding-top: 1.15rem;
+            padding-bottom: 2.2rem;
           }
           .v2-toolbar {
-            border-bottom: 1px solid var(--v2-border);
-            padding: 0 0 0.35rem;
-            margin-bottom: 0.45rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f7faf9 100%);
+            border: 1px solid var(--v2-border);
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(16, 24, 40, 0.06);
+            padding: 0.7rem 0.85rem 0.35rem;
+            margin-bottom: 0.75rem;
           }
           .v2-title {
             color: var(--v2-ink);
-            font-size: 1.35rem;
-            font-weight: 700;
+            font-size: 1.48rem;
+            font-weight: 760;
             line-height: 1.2;
+          }
+          .v2-title-row {
+            align-items: center;
+            display: flex;
+            gap: 0.5rem;
+          }
+          .v2-chip {
+            background: var(--v2-accent-soft);
+            border: 1px solid #c8ded8;
+            border-radius: 999px;
+            color: #24584f;
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            line-height: 1;
+            padding: 0.28rem 0.48rem;
+            text-transform: uppercase;
           }
           .v2-muted {
             color: var(--v2-muted);
             font-size: 0.82rem;
           }
+          .v2-section-kicker {
+            color: var(--v2-accent);
+            font-size: 0.72rem;
+            font-weight: 750;
+            letter-spacing: 0;
+            margin-bottom: 0.05rem;
+            text-transform: uppercase;
+          }
           .v2-card-title {
             font-size: 1.05rem;
-            font-weight: 700;
-            margin-bottom: 0;
+            font-weight: 760;
+            margin-bottom: 0.18rem;
+          }
+          .v2-panel-heading {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+          }
+          .v2-panel-subtitle {
+            color: var(--v2-muted);
+            font-size: 0.8rem;
+            margin: -0.12rem 0 0.28rem;
           }
           .v2-result-label {
             color: var(--v2-muted);
@@ -57,13 +105,67 @@ def _inject_styles() -> None:
             font-weight: 650;
             margin: 0 0 0.25rem;
           }
+          .v2-estimate-hero {
+            background: linear-gradient(135deg, #f7faf9 0%, #ffffff 100%);
+            border: 1px solid var(--v2-border);
+            border-radius: 10px;
+            box-shadow: inset 3px 0 0 var(--v2-accent);
+            padding: 0.7rem 0.85rem;
+            margin: 0.35rem 0 0.55rem;
+          }
+          .v2-estimate-value {
+            color: var(--v2-ink);
+            font-size: 1.28rem;
+            font-weight: 780;
+            margin: 0;
+          }
+          .v2-badge {
+            background: #f8f4e8;
+            border: 1px solid #ead9a7;
+            border-radius: 999px;
+            color: #7a5b12;
+            display: inline-block;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.22rem 0.52rem;
+          }
+          .v2-badge-green {
+            background: var(--v2-accent-soft);
+            border-color: #c8ded8;
+            color: #24584f;
+          }
+          .v2-image-card {
+            background: radial-gradient(circle at top, #ffffff 0%, #f3f6f8 100%);
+            border: 1px solid var(--v2-border);
+            border-radius: 10px;
+            padding: 0.65rem;
+            text-align: center;
+          }
+          .v2-placeholder-card {
+            background: var(--v2-soft);
+            border: 1px dashed #cbd5df;
+            border-radius: 10px;
+            color: var(--v2-muted);
+            font-size: 0.8rem;
+            min-height: 120px;
+            padding: 1rem 0.75rem;
+            text-align: center;
+          }
           .v2-swatch {
             border: 1px solid var(--v2-border);
-            border-radius: 6px;
-            height: 30px;
+            border-radius: 8px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+            height: 34px;
             width: 100%;
           }
+          .v2-swatch-label {
+            color: var(--v2-muted);
+            font-size: 0.72rem;
+            margin-top: 0.2rem;
+            text-align: center;
+          }
           .v2-user-pill {
+            background: #ffffff;
             border: 1px solid var(--v2-border);
             border-radius: 999px;
             color: var(--v2-muted);
@@ -77,6 +179,29 @@ def _inject_styles() -> None:
           .v2-tight-copy p,
           .v2-tight-copy ul {
             margin-bottom: 0.25rem;
+          }
+          .v2-list-card {
+            background: #fbfcfd;
+            border: 1px solid #e4e9ef;
+            border-radius: 10px;
+            padding: 0.55rem 0.72rem;
+          }
+          .v2-divider {
+            border-top: 1px solid var(--v2-border);
+            margin: 0.45rem 0;
+          }
+          div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: var(--v2-card);
+            border-color: var(--v2-border);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(16, 24, 40, 0.045);
+          }
+          div[data-testid="stButton"] > button {
+            border-radius: 8px;
+            font-weight: 650;
+          }
+          div[data-testid="stTabs"] button {
+            font-weight: 650;
           }
           div[data-testid="stVerticalBlock"] {
             gap: 0.45rem;
