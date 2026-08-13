@@ -18,24 +18,30 @@ def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
         with st.container(border=True):
-            st.image(str(path), caption=caption, width=width)
+            if width is None:
+                st.image(str(path), caption=caption, use_container_width=True)
+            else:
+                st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
 
 def _render_palette(response: VisualResponse) -> None:
     """Render static palette swatches from the visual response."""
-    swatch_cols = st.columns(4, gap="small")
-    for swatch_col, swatch, color in zip(swatch_cols, PALETTE_SWATCHES, response.palette):
-        with swatch_col:
-            st.markdown(
-                f'<div class="v2-swatch" style="background:{color};"></div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f'<div class="v2-swatch-label">{swatch["label"]}</div>',
-                unsafe_allow_html=True,
-            )
+    for row_start in range(0, len(PALETTE_SWATCHES), 2):
+        swatch_cols = st.columns(2, gap="small")
+        row_swatches = PALETTE_SWATCHES[row_start : row_start + 2]
+        row_colors = response.palette[row_start : row_start + 2]
+        for swatch_col, swatch, color in zip(swatch_cols, row_swatches, row_colors):
+            with swatch_col:
+                st.markdown(
+                    f'<div class="v2-swatch" style="background:{color};"></div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    f'<div class="v2-swatch-label">{swatch["label"]}</div>',
+                    unsafe_allow_html=True,
+                )
 
 
 def render_visual_panel(
@@ -66,9 +72,7 @@ def render_visual_panel(
             if response.base_template is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                base_left, base_mid, base_right = st.columns([1, 3, 1])
-                with base_mid:
-                    _show_image(Path(response.base_template), "Blank Sidekick template", width=170)
+                _show_image(Path(response.base_template), "Blank Sidekick template", width=170)
         with reference_col:
             st.markdown('<div class="v2-section-kicker">Reference / inspiration</div>', unsafe_allow_html=True)
             if reference_image_bytes:
@@ -76,10 +80,10 @@ def render_visual_panel(
                     st.image(
                         reference_image_bytes,
                         caption=f"Reference / Inspiration: {reference_image_name}",
-                        width=230,
+                        use_container_width=True,
                     )
             elif REFERENCE_IMAGE.exists():
-                _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}", width=230)
+                _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}")
             else:
                 st.markdown(
                     '<div class="v2-placeholder-card">Add a reference image for stronger visual direction.</div>',
@@ -111,14 +115,12 @@ def render_visual_panel(
             '<span class="v2-badge v2-badge-green">Concept</span></div>',
             unsafe_allow_html=True,
         )
-        mock_left, mock_mid, mock_right = st.columns([1, 4, 1])
-        with mock_mid:
-            caption = (
-                "Preliminary mockup - not final art"
-                if reference_image_bytes
-                else "Sample mock preliminary concept"
-            )
-            _show_image(STATIC_MOCKUP, caption, width=380)
+        caption = (
+            "Preliminary mockup - not final art"
+            if reference_image_bytes
+            else "Sample mock preliminary concept"
+        )
+        _show_image(STATIC_MOCKUP, caption)
         st.caption(response.summary)
 
         with st.expander("View Visual Notes"):

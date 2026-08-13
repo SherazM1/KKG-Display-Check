@@ -13,7 +13,10 @@ def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
         with st.container(border=True):
-            st.image(str(path), caption=caption, width=width)
+            if width is None:
+                st.image(str(path), caption=caption, use_container_width=True)
+            else:
+                st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -66,18 +69,14 @@ def render_estimate_panel(
             st.info("Complete the required project details above to access the assistants.")
 
         if reference_image_bytes:
-            image_left, image_mid, image_right = st.columns([1, 2, 1])
-            with image_mid:
-                with st.container(border=True):
-                    st.image(
-                        reference_image_bytes,
-                        caption=f"Reference / Inspiration: {reference_image_name}",
-                        width=220,
-                    )
+            with st.container(border=True):
+                st.image(
+                    reference_image_bytes,
+                    caption=f"Reference / Inspiration: {reference_image_name}",
+                    use_container_width=True,
+                )
         elif REFERENCE_IMAGE.exists():
-            image_left, image_mid, image_right = st.columns([1, 2, 1])
-            with image_mid:
-                _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}", width=220)
+            _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}")
         else:
             st.markdown(
                 '<div class="v2-placeholder-card">No reference image provided.<br>'
@@ -104,7 +103,7 @@ def render_estimate_panel(
                 f'<div class="v2-card-title">{response.headline}</div>',
                 unsafe_allow_html=True,
             )
-            unit_col, program_col, review_col = st.columns([1, 1.25, 0.9], gap="medium")
+            unit_col, program_col = st.columns(2, gap="medium")
             with unit_col:
                 st.markdown('<p class="v2-result-label">Unit Range</p>', unsafe_allow_html=True)
                 st.markdown(
@@ -119,12 +118,15 @@ def render_estimate_panel(
                     f"{_format_price_range(response.program_price_range)}</p>",
                     unsafe_allow_html=True,
                 )
-            with review_col:
+            confidence_col, review_col = st.columns(2, gap="medium")
+            with confidence_col:
                 st.markdown('<p class="v2-result-label">Confidence</p>', unsafe_allow_html=True)
                 st.markdown(
                     f'<span class="v2-badge v2-badge-green">{response.confidence}</span>',
                     unsafe_allow_html=True,
                 )
+            with review_col:
+                st.markdown('<p class="v2-result-label">Estimator Review</p>', unsafe_allow_html=True)
                 review_text = "Review recommended" if response.review_required else "Review optional"
                 st.markdown(f'<span class="v2-badge">{review_text}</span>', unsafe_allow_html=True)
 

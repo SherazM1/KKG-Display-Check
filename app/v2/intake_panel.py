@@ -28,7 +28,10 @@ def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
     """Render an image or show a visible warning when the asset is missing."""
     if path.exists():
         with st.container(border=True):
-            st.image(str(path), caption=caption, width=width)
+            if width is None:
+                st.image(str(path), caption=caption, use_container_width=True)
+            else:
+                st.image(str(path), caption=caption, width=width)
     else:
         st.warning(f"Missing asset: `{path}`")
 
@@ -64,7 +67,7 @@ def _render_reference_uploader() -> None:
                 st.image(
                     str(REFERENCE_IMAGE),
                     caption=f"Demo reference: {REFERENCE_IMAGE_NAME}",
-                    width=220,
+                    use_container_width=True,
                 )
         else:
             st.markdown(
@@ -75,7 +78,11 @@ def _render_reference_uploader() -> None:
         return
 
     with st.container(border=True):
-        st.image(image_bytes, caption=f"Reference / Inspiration: {image_name}", width=220)
+        st.image(
+            image_bytes,
+            caption=f"Reference / Inspiration: {image_name}",
+            use_container_width=True,
+        )
     if st.button("Remove Reference", use_container_width=True):
         clear_reference_image()
         st.rerun()
@@ -121,9 +128,7 @@ def render_intake_panel() -> ProjectContext:
             if template_path is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                preview_left, preview_mid, preview_right = st.columns([1, 4, 1])
-                with preview_mid:
-                    _show_image(template_path, f"Selected display: {display_type}", width=170)
+                _show_image(template_path, f"Selected display: {display_type}", width=170)
 
     with details_col:
         with st.container(border=True):
@@ -149,18 +154,14 @@ def render_intake_panel() -> ProjectContext:
                         format_func=_option_label,
                     )
 
-                width_col, height_col, depth_col, notes_col = st.columns(
-                    [1, 1, 1, 2.2],
-                    gap="medium",
-                )
+                width_col, height_col, depth_col = st.columns(3, gap="medium")
                 with width_col:
                     width = st.number_input("Width", min_value=1, step=1, key="v2_width")
                 with height_col:
                     height = st.number_input("Height", min_value=1, step=1, key="v2_height")
                 with depth_col:
                     depth = st.number_input("Depth", min_value=1, step=1, key="v2_depth")
-                with notes_col:
-                    notes = st.text_area("Notes", key="v2_notes", height=52)
+                notes = st.text_area("Notes", key="v2_notes", height=52)
 
             with image_col:
                 st.markdown(

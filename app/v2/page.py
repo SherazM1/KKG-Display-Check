@@ -30,6 +30,10 @@ def _inject_styles() -> None:
             --v2-ink: #101828;
             --v2-soft: #f5f7f9;
           }
+          .block-container,
+          .block-container * {
+            box-sizing: border-box;
+          }
           .block-container {
             max-width: 1380px;
             padding-top: 1.15rem;
@@ -53,6 +57,8 @@ def _inject_styles() -> None:
             align-items: center;
             display: flex;
             gap: 0.5rem;
+            flex-wrap: wrap;
+            min-width: 0;
           }
           .v2-chip {
             background: var(--v2-accent-soft);
@@ -63,8 +69,10 @@ def _inject_styles() -> None:
             font-size: 0.72rem;
             font-weight: 700;
             line-height: 1;
+            max-width: 100%;
             padding: 0.28rem 0.48rem;
             text-transform: uppercase;
+            white-space: normal;
           }
           .v2-muted {
             color: var(--v2-muted);
@@ -82,17 +90,24 @@ def _inject_styles() -> None:
             font-size: 1.05rem;
             font-weight: 760;
             margin-bottom: 0.18rem;
+            min-width: 0;
+            overflow-wrap: anywhere;
           }
           .v2-panel-heading {
             align-items: center;
             display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
             justify-content: space-between;
             margin-bottom: 0.25rem;
+            min-width: 0;
           }
           .v2-panel-subtitle {
             color: var(--v2-muted);
             font-size: 0.8rem;
             margin: -0.12rem 0 0.28rem;
+            min-width: 0;
+            overflow-wrap: anywhere;
           }
           .v2-result-label {
             color: var(--v2-muted);
@@ -115,9 +130,10 @@ def _inject_styles() -> None:
           }
           .v2-estimate-value {
             color: var(--v2-ink);
-            font-size: 1.28rem;
+            font-size: 1.18rem;
             font-weight: 780;
             margin: 0;
+            overflow-wrap: anywhere;
           }
           .v2-badge {
             background: #f8f4e8;
@@ -127,7 +143,12 @@ def _inject_styles() -> None:
             display: inline-block;
             font-size: 0.76rem;
             font-weight: 700;
+            line-height: 1.15;
+            margin: 0 0.25rem 0.25rem 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
             padding: 0.22rem 0.52rem;
+            white-space: normal;
           }
           .v2-badge-green {
             background: var(--v2-accent-soft);
@@ -150,6 +171,7 @@ def _inject_styles() -> None:
             min-height: 120px;
             padding: 1rem 0.75rem;
             text-align: center;
+            overflow-wrap: anywhere;
           }
           .v2-swatch {
             border: 1px solid var(--v2-border);
@@ -160,8 +182,11 @@ def _inject_styles() -> None:
           }
           .v2-swatch-label {
             color: var(--v2-muted);
-            font-size: 0.72rem;
+            font-size: 0.7rem;
+            line-height: 1.15;
             margin-top: 0.2rem;
+            min-height: 1.65rem;
+            overflow-wrap: anywhere;
             text-align: center;
           }
           .v2-user-pill {
@@ -169,9 +194,12 @@ def _inject_styles() -> None:
             border: 1px solid var(--v2-border);
             border-radius: 999px;
             color: var(--v2-muted);
+            display: inline-block;
+            max-width: 100%;
+            overflow-wrap: anywhere;
             padding: 0.35rem 0.65rem;
             text-align: center;
-            white-space: nowrap;
+            white-space: normal;
           }
           .v2-compact-section {
             margin: 0.35rem 0 0.2rem;
@@ -195,10 +223,37 @@ def _inject_styles() -> None:
             border-color: var(--v2-border);
             border-radius: 12px;
             box-shadow: 0 8px 24px rgba(16, 24, 40, 0.045);
+            min-width: 0;
+            overflow: hidden;
+          }
+          div[data-testid="column"] {
+            min-width: 0;
+          }
+          div[data-testid="stImage"] {
+            max-width: 100%;
+            min-width: 0;
+            text-align: center;
+          }
+          div[data-testid="stImage"] img {
+            display: block;
+            height: auto;
+            margin-left: auto;
+            margin-right: auto;
+            max-height: 360px;
+            max-width: 100%;
+            object-fit: contain;
+          }
+          div[data-testid="stImageCaption"] {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            text-align: center;
           }
           div[data-testid="stButton"] > button {
             border-radius: 8px;
             font-weight: 650;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            white-space: normal;
           }
           div[data-testid="stTabs"] button {
             font-weight: 650;
@@ -208,6 +263,11 @@ def _inject_styles() -> None:
           }
           div[data-testid="stMarkdownContainer"] p {
             margin-bottom: 0.25rem;
+            min-width: 0;
+            overflow-wrap: anywhere;
+          }
+          div[data-testid="stMarkdownContainer"] li {
+            overflow-wrap: anywhere;
           }
         </style>
         """,
