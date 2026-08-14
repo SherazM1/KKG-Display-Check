@@ -1,5 +1,6 @@
 """Visual Assistant panel for the Display Check v2 shell."""
 
+from html import escape
 from pathlib import Path
 
 import streamlit as st
@@ -27,20 +28,18 @@ def _show_image(path: Path, caption: str, *, width: int | None = None) -> None:
 
 def _render_palette(response: VisualResponse) -> None:
     """Render static palette swatches from the visual response."""
-    for row_start in range(0, len(PALETTE_SWATCHES), 2):
-        swatch_cols = st.columns(2, gap="small")
-        row_swatches = PALETTE_SWATCHES[row_start : row_start + 2]
-        row_colors = response.palette[row_start : row_start + 2]
-        for swatch_col, swatch, color in zip(swatch_cols, row_swatches, row_colors):
-            with swatch_col:
-                st.markdown(
-                    f'<div class="v2-swatch" style="background:{color};"></div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    f'<div class="v2-swatch-label">{swatch["label"]}</div>',
-                    unsafe_allow_html=True,
-                )
+    items = []
+    for swatch, color in zip(PALETTE_SWATCHES, response.palette):
+        items.append(
+            '<div class="v2-swatch-item">'
+            f'<div class="v2-swatch" style="background:{escape(color)};"></div>'
+            f'<div class="v2-swatch-label">{escape(swatch["label"])}</div>'
+            "</div>"
+        )
+    st.markdown(
+        f'<div class="v2-swatch-grid">{"".join(items)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_visual_panel(
@@ -67,13 +66,19 @@ def render_visual_panel(
 
         base_col, reference_col = st.columns(2, gap="medium")
         with base_col:
-            st.markdown('<div class="v2-section-kicker">Base template</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="v2-section-kicker v2-image-section-label">Base template</div>',
+                unsafe_allow_html=True,
+            )
             if response.base_template is None:
                 st.info("3D base template not available yet for this display family.")
             else:
                 _show_image(Path(response.base_template), "Sidekick template", width=170)
         with reference_col:
-            st.markdown('<div class="v2-section-kicker">Reference / inspiration</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="v2-section-kicker v2-image-section-label">Reference / inspiration</div>',
+                unsafe_allow_html=True,
+            )
             if reference_image_bytes:
                 with st.container(border=True):
                     st.image(
@@ -96,6 +101,7 @@ def render_visual_panel(
         )
         st.caption(response.graphic_direction)
         _render_palette(response)
+        st.markdown('<div class="v2-form-separator"></div>', unsafe_allow_html=True)
 
         st.text_area(
             "Visual Direction",

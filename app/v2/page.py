@@ -44,7 +44,7 @@ def _inject_styles() -> None:
             border: 1px solid var(--v2-border);
             border-radius: 12px;
             box-shadow: 0 12px 30px rgba(16, 24, 40, 0.06);
-            padding: 0.7rem 0.85rem 0.35rem;
+            padding: 0.8rem 0.9rem 0.55rem;
             margin-bottom: 0.75rem;
           }
           .v2-title {
@@ -59,6 +59,22 @@ def _inject_styles() -> None:
             gap: 0.5rem;
             flex-wrap: wrap;
             min-width: 0;
+          }
+          .v2-toolbar-subtitle {
+            color: var(--v2-muted);
+            font-size: 0.82rem;
+            line-height: 1.25;
+            margin-top: 0.18rem;
+            overflow-wrap: anywhere;
+          }
+          .v2-field-label {
+            color: var(--v2-ink);
+            font-size: 0.86rem;
+            font-weight: 650;
+            line-height: 1.2;
+            margin-bottom: 0.28rem;
+            min-width: 0;
+            overflow-wrap: anywhere;
           }
           .v2-chip {
             background: var(--v2-accent-soft);
@@ -83,8 +99,11 @@ def _inject_styles() -> None:
             font-size: 0.72rem;
             font-weight: 750;
             letter-spacing: 0;
-            margin-bottom: 0.05rem;
+            margin-bottom: 0.25rem;
             text-transform: uppercase;
+          }
+          .v2-image-section-label {
+            margin-bottom: 0.55rem;
           }
           .v2-card-title {
             font-size: 1.05rem;
@@ -105,7 +124,7 @@ def _inject_styles() -> None:
           .v2-panel-subtitle {
             color: var(--v2-muted);
             font-size: 0.8rem;
-            margin: -0.12rem 0 0.28rem;
+            margin: 0 0 0.45rem;
             min-width: 0;
             overflow-wrap: anywhere;
           }
@@ -173,11 +192,24 @@ def _inject_styles() -> None:
             text-align: center;
             overflow-wrap: anywhere;
           }
+          .v2-swatch-grid {
+            display: grid;
+            gap: 0.9rem 0.8rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin: 0.75rem 0 0.85rem;
+            max-width: 100%;
+          }
+          .v2-swatch-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            min-width: 0;
+          }
           .v2-swatch {
             border: 1px solid var(--v2-border);
             border-radius: 8px;
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-            height: 32px;
+            height: 34px;
             max-width: 100%;
             width: 100%;
           }
@@ -185,9 +217,9 @@ def _inject_styles() -> None:
             color: var(--v2-muted);
             font-size: 0.7rem;
             line-height: 1.15;
-            margin: 0.18rem auto 0.15rem;
+            margin: 0;
             max-width: 100%;
-            min-height: 1.65rem;
+            min-height: 1.7rem;
             overflow-wrap: anywhere;
             text-align: center;
             white-space: normal;
@@ -197,12 +229,18 @@ def _inject_styles() -> None:
             border: 1px solid var(--v2-border);
             border-radius: 999px;
             color: var(--v2-muted);
-            display: inline-block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2.42rem;
             max-width: 100%;
             overflow-wrap: anywhere;
             padding: 0.35rem 0.65rem;
             text-align: center;
             white-space: normal;
+          }
+          .v2-form-separator {
+            height: 0.55rem;
           }
           .v2-compact-section {
             margin: 0.35rem 0 0.2rem;
@@ -219,7 +257,7 @@ def _inject_styles() -> None:
           }
           .v2-divider {
             border-top: 1px solid var(--v2-border);
-            margin: 0.45rem 0;
+            margin: 0.65rem 0;
           }
           div[data-testid="stVerticalBlockBorderWrapper"] {
             background: var(--v2-card);
