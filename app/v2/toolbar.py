@@ -21,10 +21,6 @@ def render_toolbar() -> None:
             '<span class="v2-chip">V2</span></div>',
             unsafe_allow_html=True,
         )
-        st.markdown(
-            '<div class="v2-toolbar-subtitle">Visual planning workspace</div>',
-            unsafe_allow_html=True,
-        )
 
     with project_col:
         st.markdown('<div class="v2-field-label">Project Name</div>', unsafe_allow_html=True)

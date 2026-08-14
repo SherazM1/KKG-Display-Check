@@ -36,7 +36,7 @@ def _inject_styles() -> None:
           }
           .block-container {
             max-width: 1380px;
-            padding-top: 1.15rem;
+            padding-top: 3.25rem;
             padding-bottom: 2.2rem;
           }
           .v2-toolbar {
@@ -59,13 +59,6 @@ def _inject_styles() -> None:
             gap: 0.5rem;
             flex-wrap: wrap;
             min-width: 0;
-          }
-          .v2-toolbar-subtitle {
-            color: var(--v2-muted);
-            font-size: 0.82rem;
-            line-height: 1.25;
-            margin-top: 0.18rem;
-            overflow-wrap: anywhere;
           }
           .v2-field-label {
             color: var(--v2-ink);

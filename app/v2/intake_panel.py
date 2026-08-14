@@ -103,8 +103,7 @@ def _option_label(option: str) -> str:
 def render_intake_panel() -> ProjectContext:
     """Render selected display and shared project fields."""
     st.markdown(
-        '<div class="v2-section-kicker">Project setup</div>'
-        '<div class="v2-card-title">Project Details</div>',
+        '<div class="v2-section-kicker">Project setup</div>',
         unsafe_allow_html=True,
     )
     display_col, details_col = st.columns([0.85, 3.15], gap="large")
@@ -112,9 +111,7 @@ def render_intake_panel() -> ProjectContext:
     with display_col:
         with st.container(border=True):
             st.markdown(
-                '<div class="v2-panel-heading">'
-                '<div class="v2-card-title">Display Type</div>'
-                '<span class="v2-chip">Sidekick flow</span></div>',
+                '<div class="v2-card-title">Display Type</div>',
                 unsafe_allow_html=True,
             )
             display_type = st.selectbox(
