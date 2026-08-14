@@ -102,10 +102,6 @@ def _option_label(option: str) -> str:
 
 def render_intake_panel() -> ProjectContext:
     """Render selected display and shared project fields."""
-    st.markdown(
-        '<div class="v2-section-kicker">Project setup</div>',
-        unsafe_allow_html=True,
-    )
     display_col, details_col = st.columns([0.85, 3.15], gap="large")
 
     with display_col:

@@ -7,7 +7,6 @@ from app.v2.state import update_project_context
 
 def render_toolbar() -> None:
     """Render static project actions and user placeholder controls."""
-    st.markdown('<div class="v2-toolbar">', unsafe_allow_html=True)
     title_col, project_col, action_col = st.columns(
         [1.2, 1.8, 2.65],
         gap="small",
@@ -41,5 +40,3 @@ def render_toolbar() -> None:
             st.button("Export", use_container_width=True, disabled=True)
         with viewer_col:
             st.markdown('<div class="v2-user-pill">Viewer</div>', unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)

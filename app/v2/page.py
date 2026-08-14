@@ -39,14 +39,6 @@ def _inject_styles() -> None:
             padding-top: 3.25rem;
             padding-bottom: 2.2rem;
           }
-          .v2-toolbar {
-            background: linear-gradient(180deg, #ffffff 0%, #f7faf9 100%);
-            border: 1px solid var(--v2-border);
-            border-radius: 12px;
-            box-shadow: 0 12px 30px rgba(16, 24, 40, 0.06);
-            padding: 0.8rem 0.9rem 0.55rem;
-            margin-bottom: 0.75rem;
-          }
           .v2-title {
             color: var(--v2-ink);
             font-size: 1.48rem;
@@ -264,6 +256,8 @@ def _inject_styles() -> None:
             min-width: 0;
           }
           div[data-testid="stImage"] {
+            margin-left: auto;
+            margin-right: auto;
             max-width: 100%;
             min-width: 0;
             text-align: center;
