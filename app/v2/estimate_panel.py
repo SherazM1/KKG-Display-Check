@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from app.v2.mock_data import REFERENCE_IMAGE, REFERENCE_IMAGE_NAME
+from app.v2.mock_data import REFERENCE_IMAGE
 from app.v2.models import EstimateResponse, PriceRange, ProjectContext
 from app.v2.services.estimate_service import EstimateService
 
@@ -72,11 +72,11 @@ def render_estimate_panel(
             with st.container(border=True):
                 st.image(
                     reference_image_bytes,
-                    caption=f"Reference / Inspiration: {reference_image_name}",
+                    caption=reference_image_name or "Reference image",
                     use_container_width=True,
                 )
         elif REFERENCE_IMAGE.exists():
-            _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}")
+            _show_image(REFERENCE_IMAGE, "Demo reference")
         else:
             st.markdown(
                 '<div class="v2-placeholder-card">No reference image provided.<br>'

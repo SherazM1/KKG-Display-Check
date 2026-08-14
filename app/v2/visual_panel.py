@@ -7,7 +7,6 @@ import streamlit as st
 from app.v2.mock_data import (
     PALETTE_SWATCHES,
     REFERENCE_IMAGE,
-    REFERENCE_IMAGE_NAME,
     STATIC_MOCKUP,
 )
 from app.v2.models import ProjectContext, VisualResponse
@@ -72,18 +71,18 @@ def render_visual_panel(
             if response.base_template is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                _show_image(Path(response.base_template), "Blank Sidekick template", width=170)
+                _show_image(Path(response.base_template), "Sidekick template", width=170)
         with reference_col:
             st.markdown('<div class="v2-section-kicker">Reference / inspiration</div>', unsafe_allow_html=True)
             if reference_image_bytes:
                 with st.container(border=True):
                     st.image(
                         reference_image_bytes,
-                        caption=f"Reference / Inspiration: {reference_image_name}",
+                        caption=reference_image_name or "Reference image",
                         use_container_width=True,
                     )
             elif REFERENCE_IMAGE.exists():
-                _show_image(REFERENCE_IMAGE, f"Demo reference: {REFERENCE_IMAGE_NAME}")
+                _show_image(REFERENCE_IMAGE, "Demo reference")
             else:
                 st.markdown(
                     '<div class="v2-placeholder-card">Add a reference image for stronger visual direction.</div>',

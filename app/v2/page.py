@@ -177,17 +177,20 @@ def _inject_styles() -> None:
             border: 1px solid var(--v2-border);
             border-radius: 8px;
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-            height: 34px;
+            height: 32px;
+            max-width: 100%;
             width: 100%;
           }
           .v2-swatch-label {
             color: var(--v2-muted);
             font-size: 0.7rem;
             line-height: 1.15;
-            margin-top: 0.2rem;
+            margin: 0.18rem auto 0.15rem;
+            max-width: 100%;
             min-height: 1.65rem;
             overflow-wrap: anywhere;
             text-align: center;
+            white-space: normal;
           }
           .v2-user-pill {
             background: #ffffff;

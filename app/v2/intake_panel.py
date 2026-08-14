@@ -9,7 +9,6 @@ from app.v2.mock_data import (
     DISPLAY_OPTIONS,
     PRINT_TYPE_OPTIONS,
     REFERENCE_IMAGE,
-    REFERENCE_IMAGE_NAME,
     SHIPPING_PACKOUT_OPTIONS,
 )
 from app.v2.models import ProjectContext, ProjectDimensions
@@ -43,6 +42,7 @@ def _render_reference_uploader() -> None:
         type=["png", "jpg", "jpeg", "webp"],
         key=get_reference_uploader_key(),
     )
+    st.caption("10 MB max - PNG, JPG, JPEG, WEBP")
     if uploaded is not None:
         try:
             sanitized = sanitize_image_upload(
@@ -66,7 +66,7 @@ def _render_reference_uploader() -> None:
             with st.container(border=True):
                 st.image(
                     str(REFERENCE_IMAGE),
-                    caption=f"Demo reference: {REFERENCE_IMAGE_NAME}",
+                    caption="Demo reference",
                     use_container_width=True,
                 )
         else:
@@ -80,7 +80,7 @@ def _render_reference_uploader() -> None:
     with st.container(border=True):
         st.image(
             image_bytes,
-            caption=f"Reference / Inspiration: {image_name}",
+            caption=image_name or "Reference image",
             use_container_width=True,
         )
     if st.button("Remove Reference", use_container_width=True):
@@ -107,7 +107,7 @@ def render_intake_panel() -> ProjectContext:
         '<div class="v2-card-title">Project Details</div>',
         unsafe_allow_html=True,
     )
-    display_col, details_col = st.columns([1, 3], gap="large")
+    display_col, details_col = st.columns([0.85, 3.15], gap="large")
 
     with display_col:
         with st.container(border=True):
