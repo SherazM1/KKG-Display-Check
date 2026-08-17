@@ -42,7 +42,6 @@ def _render_reference_uploader() -> None:
         type=["png", "jpg", "jpeg", "webp"],
         key=get_reference_uploader_key(),
     )
-    st.caption("10 MB max - PNG, JPG, JPEG, WEBP")
     if uploaded is not None:
         try:
             sanitized = sanitize_image_upload(
@@ -121,7 +120,7 @@ def render_intake_panel() -> ProjectContext:
             if template_path is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                _show_image(template_path, f"Selected display: {display_type}", width=170)
+                _show_image(template_path, display_type, width=150)
 
     with details_col:
         with st.container(border=True):
