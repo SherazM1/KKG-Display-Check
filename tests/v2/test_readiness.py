@@ -8,9 +8,24 @@ def test_project_ready_when_required_fields_are_valid() -> None:
     assert is_project_ready(ProjectContext())
 
 
-def test_project_not_ready_without_display_type() -> None:
-    """Display type is required."""
-    assert not is_project_ready(ProjectContext(display_type=""))
+def test_project_not_ready_without_display_family() -> None:
+    """Display family is required."""
+    assert not is_project_ready(ProjectContext(display_family=""))
+
+
+def test_project_not_ready_without_display_configuration() -> None:
+    """Display configuration is required."""
+    assert not is_project_ready(ProjectContext(display_configuration=""))
+
+
+def test_project_not_ready_without_baseline_size() -> None:
+    """Baseline size or footprint is required."""
+    assert not is_project_ready(ProjectContext(baseline_size=""))
+
+
+def test_project_not_ready_without_footprint_id() -> None:
+    """Resolved footprint id is required."""
+    assert not is_project_ready(ProjectContext(footprint_id=""))
 
 
 def test_project_not_ready_when_quantity_is_less_than_one() -> None:

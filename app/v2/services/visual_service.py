@@ -9,7 +9,7 @@ class VisualService:
 
     def prepare(self, project: ProjectContext) -> VisualResponse:
         """Build a mocked visual response using shared project fields."""
-        is_sidekick = project.display_type == "Sidekick"
+        is_sidekick = project.display_family == "sidekick"
         base_template = str(BASE_TEMPLATE) if is_sidekick else None
         palette = [swatch["hex"] for swatch in PALETTE_SWATCHES]
 

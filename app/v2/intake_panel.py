@@ -4,9 +4,16 @@ from pathlib import Path
 
 import streamlit as st
 
+from app.v2.display_registry import (
+    DISPLAY_FAMILIES,
+    DisplayConfiguration,
+    DisplayFamily,
+    DisplaySelection,
+    display_type_label,
+    resolve_display_selection,
+)
 from app.v2.mock_data import (
     BASE_TEMPLATE,
-    DISPLAY_OPTIONS,
     PRINT_TYPE_OPTIONS,
     REFERENCE_IMAGE,
     SHIPPING_PACKOUT_OPTIONS,
@@ -87,9 +94,9 @@ def _render_reference_uploader() -> None:
         st.rerun()
 
 
-def _display_template_path(display_type: str) -> Path | None:
+def _display_template_path(selection: DisplaySelection) -> Path | None:
     """Return the available base template path for a display family."""
-    if display_type == "Sidekick":
+    if selection.family.id == "sidekick":
         return BASE_TEMPLATE
     return None
 
@@ -99,23 +106,93 @@ def _option_label(option: str) -> str:
     return option or "Select..."
 
 
+def _family_label(family_id: str) -> str:
+    """Return the display label for a family id."""
+    selection = resolve_display_selection(family_id, None, None)
+    return selection.family.label
+
+
+def _configuration_label(family: DisplayFamily, configuration_id: str) -> str:
+    """Return the display label for a configuration id."""
+    selection = resolve_display_selection(family.id, configuration_id, None)
+    return selection.configuration.label
+
+
+def _baseline_label(configuration: DisplayConfiguration, baseline_id: str) -> str:
+    """Return the display label for a baseline id."""
+    selection = resolve_display_selection(None, None, None)
+    baseline = next(
+        (
+            option
+            for option in configuration.baselines
+            if option.id == baseline_id
+        ),
+        selection.baseline,
+    )
+    return baseline.label
+
+
+def _sync_display_selection() -> DisplaySelection:
+    """Normalize stale Streamlit display selection keys to valid registry ids."""
+    selection = resolve_display_selection(
+        st.session_state.get("v2_display_family"),
+        st.session_state.get("v2_display_configuration"),
+        st.session_state.get("v2_baseline_size"),
+    )
+    st.session_state["v2_display_family"] = selection.family.id
+    st.session_state["v2_display_configuration"] = selection.configuration.id
+    st.session_state["v2_baseline_size"] = selection.baseline.id
+    return selection
+
+
 def render_intake_panel() -> ProjectContext:
     """Render selected display and shared project fields."""
     display_col, details_col = st.columns([0.85, 3.15], gap="large")
 
     with display_col:
         with st.container(border=True):
-            display_type = st.selectbox(
-                "Display Type",
-                ["", *DISPLAY_OPTIONS],
-                key="v2_display_type",
-                format_func=_option_label,
+            selection = _sync_display_selection()
+            family_id = st.selectbox(
+                "Display Family",
+                [family.id for family in DISPLAY_FAMILIES],
+                key="v2_display_family",
+                format_func=_family_label,
             )
-            template_path = _display_template_path(display_type)
+            selection = resolve_display_selection(
+                family_id,
+                st.session_state.get("v2_display_configuration"),
+                st.session_state.get("v2_baseline_size"),
+            )
+            st.session_state["v2_display_configuration"] = selection.configuration.id
+            st.session_state["v2_baseline_size"] = selection.baseline.id
+
+            configuration_id = st.selectbox(
+                "Configuration",
+                [configuration.id for configuration in selection.family.configurations],
+                key="v2_display_configuration",
+                format_func=lambda value: _configuration_label(selection.family, value),
+            )
+            selection = resolve_display_selection(
+                family_id,
+                configuration_id,
+                st.session_state.get("v2_baseline_size"),
+            )
+            st.session_state["v2_baseline_size"] = selection.baseline.id
+
+            baseline_id = st.selectbox(
+                "Baseline Size / Footprint",
+                [baseline.id for baseline in selection.configuration.baselines],
+                key="v2_baseline_size",
+                format_func=lambda value: _baseline_label(selection.configuration, value),
+            )
+            selection = resolve_display_selection(family_id, configuration_id, baseline_id)
+
+            template_path = _display_template_path(selection)
             if template_path is None:
                 st.info("3D base template not available yet for this display family.")
             else:
-                _show_image(template_path, display_type, width=150)
+                _show_image(template_path, selection.family.label, width=150)
+            st.session_state["v2_display_type"] = display_type_label(selection)
 
     with details_col:
         with st.container(border=True):
@@ -158,7 +235,12 @@ def render_intake_panel() -> ProjectContext:
                 _render_reference_uploader()
 
     return update_project_context(
-        display_type=display_type,
+        display_type=display_type_label(selection),
+        display_family=selection.family.id,
+        display_configuration=selection.configuration.id,
+        baseline_size=selection.baseline.id,
+        footprint_id=selection.baseline.footprint_id,
+        legacy_display_id=selection.configuration.legacy_id,
         quantity=int(quantity),
         print_type=print_type,
         shipping_packout=shipping_packout,

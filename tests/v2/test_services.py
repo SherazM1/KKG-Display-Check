@@ -12,6 +12,10 @@ def test_project_context_defaults() -> None:
 
     assert project.project_name == "Display Check Sample"
     assert project.display_type == "Sidekick"
+    assert project.display_family == "sidekick"
+    assert project.display_configuration == "hooks"
+    assert project.baseline_size == "24"
+    assert project.footprint_id == "sk-24-hooks"
     assert project.quantity == 500
     assert project.print_type == "Litho Laminate"
     assert project.shipping_packout == "Flat Pack"
@@ -34,7 +38,9 @@ def test_estimate_service_reflects_context_and_program_range() -> None:
 
 def test_visual_service_returns_sidekick_template() -> None:
     """Mock visual response maps Sidekick to the static Sidekick template."""
-    response = VisualService().prepare(ProjectContext(display_type="Sidekick"))
+    response = VisualService().prepare(
+        ProjectContext(display_type="Sidekick", display_family="sidekick")
+    )
 
     assert response.display_type == "Sidekick"
     assert BASE_TEMPLATE.name == "base_sidekick.png"

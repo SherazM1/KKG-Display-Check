@@ -18,6 +18,11 @@ class ProjectContext:
 
     project_name: str = "Display Check Sample"
     display_type: str = "Sidekick"
+    display_family: str = "sidekick"
+    display_configuration: str = "hooks"
+    baseline_size: str = "24"
+    footprint_id: str = "sk-24-hooks"
+    legacy_display_id: str = "sidekick/hooks"
     quantity: int = 500
     print_type: str = "Litho Laminate"
     shipping_packout: str = "Flat Pack"
@@ -32,7 +37,10 @@ class ProjectContext:
 def is_project_ready(project: ProjectContext) -> bool:
     """Return whether required intake fields are valid."""
     return (
-        bool(project.display_type.strip())
+        bool(project.display_family.strip())
+        and bool(project.display_configuration.strip())
+        and bool(project.baseline_size.strip())
+        and bool(project.footprint_id.strip())
         and project.quantity >= 1
         and bool(project.print_type.strip())
         and bool(project.shipping_packout.strip())
