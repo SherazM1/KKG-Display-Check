@@ -1,6 +1,6 @@
 """Tests for Display Check v2 domain and mock services."""
 
-from app.v2.mock_data import BASE_TEMPLATE
+from app.v2.mock_data import BASE_TEMPLATE, STATIC_MOCKUP
 from app.v2.models import ProjectContext, ProjectDimensions
 from app.v2.services.estimate_service import EstimateService
 from app.v2.services.visual_service import VisualService
@@ -37,5 +37,11 @@ def test_visual_service_returns_sidekick_template() -> None:
     response = VisualService().prepare(ProjectContext(display_type="Sidekick"))
 
     assert response.display_type == "Sidekick"
+    assert BASE_TEMPLATE.name == "base_sidekick.png"
     assert response.base_template == str(BASE_TEMPLATE)
     assert len(response.palette) == 4
+
+
+def test_static_mockup_uses_new_sidekick_reference() -> None:
+    """Mock preliminary output uses the canonical static Sidekick visual."""
+    assert STATIC_MOCKUP.name == "staticreference_sk.png"
