@@ -52,15 +52,6 @@ def _inject_styles() -> None:
             flex-wrap: wrap;
             min-width: 0;
           }
-          .v2-field-label {
-            color: var(--v2-ink);
-            font-size: 0.86rem;
-            font-weight: 650;
-            line-height: 1.2;
-            margin-bottom: 0.28rem;
-            min-width: 0;
-            overflow-wrap: anywhere;
-          }
           .v2-chip {
             background: var(--v2-accent-soft);
             border: 1px solid #c8ded8;
@@ -285,9 +276,6 @@ def _inject_styles() -> None:
           }
           div[data-testid="stTabs"] button {
             font-weight: 650;
-          }
-          div[data-testid="stVerticalBlock"] {
-            gap: 0.45rem;
           }
           div[data-testid="stMarkdownContainer"] p {
             margin-bottom: 0.25rem;

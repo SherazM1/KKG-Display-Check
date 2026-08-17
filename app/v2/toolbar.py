@@ -22,11 +22,9 @@ def render_toolbar() -> None:
         )
 
     with project_col:
-        st.markdown('<div class="v2-field-label">Project Name</div>', unsafe_allow_html=True)
         project_name = st.text_input(
             "Project Name",
             key="v2_project_name",
-            label_visibility="collapsed",
         )
         update_project_context(project_name=project_name)
 

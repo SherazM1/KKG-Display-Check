@@ -105,15 +105,10 @@ def render_intake_panel() -> ProjectContext:
 
     with display_col:
         with st.container(border=True):
-            st.markdown(
-                '<div class="v2-card-title">Display Type</div>',
-                unsafe_allow_html=True,
-            )
             display_type = st.selectbox(
                 "Display Type",
                 ["", *DISPLAY_OPTIONS],
                 key="v2_display_type",
-                label_visibility="collapsed",
                 format_func=_option_label,
             )
             template_path = _display_template_path(display_type)
