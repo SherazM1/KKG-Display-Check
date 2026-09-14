@@ -1,6 +1,8 @@
 """Tests for Display Check v2 project readiness."""
 
-from app.v2.models import ProjectContext, ProjectDimensions, is_project_ready
+import pytest
+
+from app.v2.models import ProjectContext, is_project_ready
 
 
 def test_project_ready_when_required_fields_are_valid() -> None:
@@ -43,11 +45,16 @@ def test_project_not_ready_without_shipping_packout() -> None:
     assert not is_project_ready(ProjectContext(shipping_packout=""))
 
 
-def test_dimensions_are_optional_for_readiness() -> None:
-    """Missing dimensions do not block assistant readiness."""
-    project = ProjectContext(dimensions=ProjectDimensions())
+@pytest.mark.parametrize("dimension", ["width", "height", "depth"])
+@pytest.mark.parametrize("value", [None, 0, -1, float("nan")])
+def test_dimensions_are_required_for_readiness(
+    dimension: str, value: float | None
+) -> None:
+    """Every dimension must exist and be positive."""
+    project = ProjectContext()
+    setattr(project.dimensions, dimension, value)
 
-    assert is_project_ready(project)
+    assert not is_project_ready(project)
 
 
 def test_reference_image_is_optional_for_readiness() -> None:

@@ -34,6 +34,40 @@ class ProjectContext:
     notes: str = ""
 
 
+@dataclass
+class ResolvedDisplay:
+    """Validated physical display instance for downstream backend services."""
+
+    family_id: str
+    configuration_id: str
+    baseline_id: str
+    footprint_id: str
+    family_label: str
+    configuration_label: str
+    baseline_label: str
+    width: float
+    height: float
+    depth: float
+    units: str = "in"
+
+
+@dataclass(frozen=True)
+class DisplayKnowledgeProfile:
+    """Reference facts and explicit gaps; empty tuples imply no inferred facts."""
+
+    profile_id: str
+    family_id: str
+    configuration_id: str
+    baseline_id: str | None
+    structural_traits: tuple[str, ...]
+    visible_components: tuple[str, ...]
+    hidden_support_components: tuple[str, ...]
+    known_materials: tuple[str, ...]
+    production_notes: tuple[str, ...]
+    known_unknowns: tuple[str, ...]
+    sources: tuple[str, ...]
+
+
 def is_project_ready(project: ProjectContext) -> bool:
     """Return whether required intake fields are valid."""
     return (
@@ -44,6 +78,14 @@ def is_project_ready(project: ProjectContext) -> bool:
         and project.quantity >= 1
         and bool(project.print_type.strip())
         and bool(project.shipping_packout.strip())
+        and all(
+            value is not None and value > 0
+            for value in (
+                project.dimensions.width,
+                project.dimensions.height,
+                project.dimensions.depth,
+            )
+        )
     )
 
 
