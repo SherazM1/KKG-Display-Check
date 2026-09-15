@@ -28,6 +28,7 @@ from app.v2.services.estimate_basis_service import build_estimate_basis
 PORTABLE_MODULES = (
     "app.v2.models",
     "app.v2.display_registry",
+    "app.v2.intake_options",
     "app.v2.uploads",
     "app.v2.knowledge.display_profiles",
     "app.v2.services.display_resolver",
@@ -41,8 +42,9 @@ PORTABLE_MODULES = (
     [
         ("streamlit",),
         ("app.catalog", "app.pricing", "app.gallery", "app.visualizer"),
+        ("api",),
     ],
-    ids=["no-streamlit", "no-v1-application-modules"],
+    ids=["no-streamlit", "no-v1-application-modules", "no-api-dependency"],
 )
 def test_portable_backend_imports_and_runs_without_forbidden_modules(forbidden) -> None:
     """Fresh interpreter catches transitive and lazy imports despite pytest caches."""

@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
+from app.v2.intake_options import PRINT_TYPE_OPTIONS, SHIPPING_PACKOUT_OPTIONS
+
 
 DISPLAY_OPTIONS = ["Sidekick", "PDQ", "Half Pallet", "Quarter Pallet"]
-PRINT_TYPE_OPTIONS = ["Litho Laminate", "Digital Print", "Flexo Print"]
-SHIPPING_PACKOUT_OPTIONS = ["Flat Pack", "Assembled", "Retail Ready"]
 
 PALETTE_SWATCHES = [
     {"label": "Olive green", "hex": "#7A823B"},
