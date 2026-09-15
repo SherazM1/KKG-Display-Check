@@ -68,6 +68,36 @@ class DisplayKnowledgeProfile:
     sources: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class EstimateBasis:
+    """Project-specific estimating facts and guardrails before pricing."""
+
+    family_id: str
+    configuration_id: str
+    baseline_id: str
+    footprint_id: str
+    quantity: int
+    print_type: str
+    shipping_packout: str
+    width: float
+    height: float
+    depth: float
+    units: str
+    structural_factors: tuple[str, ...]
+    material_factors: tuple[str, ...]
+    print_factors: tuple[str, ...]
+    production_factors: tuple[str, ...]
+    assembly_factors: tuple[str, ...]
+    packout_factors: tuple[str, ...]
+    quantity_factors: tuple[str, ...]
+    assumptions: tuple[str, ...]
+    unknowns: tuple[str, ...]
+    risk_factors: tuple[str, ...]
+    review_required: bool
+    review_reasons: tuple[str, ...]
+    contributing_rules: tuple[str, ...]
+
+
 def is_project_ready(project: ProjectContext) -> bool:
     """Return whether required intake fields are valid."""
     return (
