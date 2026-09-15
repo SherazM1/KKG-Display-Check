@@ -77,7 +77,7 @@ def test_canonical_baseline_requires_footprint(
 
 
 @pytest.mark.parametrize("dimension", ["width", "height", "depth"])
-@pytest.mark.parametrize("value", [None, 0, -1, float("nan")])
+@pytest.mark.parametrize("value", [None, 0, -1, float("nan"), float("inf"), -float("inf")])
 def test_dimensions_must_exist_and_be_positive(
     dimension: str, value: float | None
 ) -> None:

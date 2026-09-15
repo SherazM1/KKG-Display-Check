@@ -46,11 +46,11 @@ def test_project_not_ready_without_shipping_packout() -> None:
 
 
 @pytest.mark.parametrize("dimension", ["width", "height", "depth"])
-@pytest.mark.parametrize("value", [None, 0, -1, float("nan")])
+@pytest.mark.parametrize("value", [None, 0, -1, float("nan"), float("inf"), -float("inf")])
 def test_dimensions_are_required_for_readiness(
     dimension: str, value: float | None
 ) -> None:
-    """Every dimension must exist and be positive."""
+    """Every physical dimension must exist, be finite, and be positive."""
     project = ProjectContext()
     setattr(project.dimensions, dimension, value)
 

@@ -1,6 +1,7 @@
 """Streamlit-independent domain contracts for Display Check v2."""
 
 from dataclasses import dataclass, field
+import math
 
 
 @dataclass
@@ -109,7 +110,7 @@ def is_project_ready(project: ProjectContext) -> bool:
         and bool(project.print_type.strip())
         and bool(project.shipping_packout.strip())
         and all(
-            value is not None and value > 0
+            value is not None and math.isfinite(value) and value > 0
             for value in (
                 project.dimensions.width,
                 project.dimensions.height,

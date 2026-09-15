@@ -1,5 +1,7 @@
 """Strict, Streamlit-independent resolution of physical display selections."""
 
+import math
+
 from app.v2.display_registry import get_baseline, get_configuration, get_family
 from app.v2.models import ProjectContext, ResolvedDisplay
 
@@ -9,7 +11,7 @@ class DisplayResolutionError(ValueError):
 
 
 def _positive_dimension(value: float | None, label: str) -> float:
-    if value is None or not value > 0:
+    if value is None or not math.isfinite(value) or not value > 0:
         raise DisplayResolutionError(f"{label} must be greater than zero")
     return value
 
